@@ -205,7 +205,7 @@ export class Synapse {
   }
 
   /**
-   * Gets the signer instance
+   * Gets the signer instance, possibly a session key
    * @returns The ethers signer
    */
   getSigner(): ethers.Signer {
@@ -214,6 +214,14 @@ export class Synapse {
     } else {
       return this._session.getSigner()
     }
+  }
+
+  /**
+   * Gets the client signer instance
+   * @returns the ethers signer
+   */
+  getClient(): ethers.Signer {
+    return this._signer
   }
 
   setSession(sessionKeySigner: ethers.Signer): SessionKey {
