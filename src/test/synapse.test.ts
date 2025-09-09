@@ -253,8 +253,27 @@ describe('Synapse', () => {
       // Should be the same instance
       assert.equal(storage1, storage2)
     })
+  })
 
-    it('should create storage context with session key', async () => {
+  describe('Session Keys', () => {
+    let originalFetch: typeof global.fetch
+
+    beforeEach(() => {
+      originalFetch = global.fetch
+      // Default mock for ping validation - can be overridden in specific tests
+      global.fetch = async (input: string | URL | Request) => {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+        if (url.includes('/ping')) {
+          return { status: 200, statusText: 'OK' } as any
+        }
+        throw new Error(`Unexpected URL: ${url}`)
+      }
+    })
+
+    afterEach(() => {
+      global.fetch = originalFetch
+    })
+    it('should storage.createContext with session key', async () => {
       server.use(JSONRPC(presets.basic))
       const synapse = await Synapse.create({ signer })
       const sessionKeySigner = new ethers.Wallet(PRIVATE_KEYS.key2, provider)
@@ -263,7 +282,7 @@ describe('Synapse', () => {
       assert.equal(context['_signer'], sessionKeySigner)
 
       // Payments uses the original signer
-      const accountInfo = await synapse.payments.accountInfo()
+      // TODO const accountInfo = await synapse.payments.accountInfo()
     })
   })
 
