@@ -273,8 +273,24 @@ describe('Synapse', () => {
     afterEach(() => {
       global.fetch = originalFetch
     })
+
     it('should storage.createContext with session key', async () => {
-      server.use(JSONRPC(presets.basic))
+      const signerAddress = await signer.getAddress()
+      server.use(
+        JSONRPC({
+          ...presets.basic,
+          payments: {
+            ...presets.basic.payments,
+            accounts: (args) => {
+              const token = args[0]
+              const user = args[1]
+              assert.equal(user, signerAddress)
+              assert.equal(token, ADDRESSES.calibration.usdfcToken)
+              return [0, 0, 0, 0]
+            },
+          },
+        })
+      )
       const synapse = await Synapse.create({ signer })
       const sessionKeySigner = new ethers.Wallet(PRIVATE_KEYS.key2, provider)
       const sessionKey = synapse.setSession(sessionKeySigner)
@@ -282,7 +298,7 @@ describe('Synapse', () => {
       assert.equal(context['_signer'], sessionKeySigner)
 
       // Payments uses the original signer
-      // TODO const accountInfo = await synapse.payments.accountInfo()
+      const accountInfo = await synapse.payments.accountInfo()
     })
   })
 
