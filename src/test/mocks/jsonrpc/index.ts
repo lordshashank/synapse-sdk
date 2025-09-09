@@ -18,6 +18,7 @@ import { warmStorageCallHandler, warmStorageViewCallHandler } from './warm-stora
 
 export const PRIVATE_KEYS = {
   key1: '0x1234567890123456789012345678901234567890123456789012345678901234',
+  key2: '0x4123456789012345678901234567890123456789012345678901234567890123',
 }
 export const ADDRESSES = {
   client1: '0x2e988A386a799F506693793c6A5AF6B54dfAaBfB' as Address,
@@ -39,6 +40,7 @@ export const ADDRESSES = {
     filCDN: '0x0000000000000000000000000000000000000000' as Address,
     viewContract: '0x1996B60838871D0bc7980Bc02DD6Eb920535bE54' as Address,
     spRegistry: '0x0000000000000000000000000000000000000001' as Address,
+    sessionKeyRegistry: '0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452' as Address,
   },
 }
 
@@ -207,6 +209,7 @@ export const presets = {
       filCDNBeneficiaryAddress: () => [ADDRESSES.calibration.filCDN],
       viewContractAddress: () => [ADDRESSES.calibration.viewContract],
       serviceProviderRegistry: () => [ADDRESSES.calibration.spRegistry],
+      sessionKeyRegistry: () => [ADDRESSES.calibration.sessionKeyRegistry],
       getServicePrice: () => [
         {
           pricePerTiBPerMonthNoCDN: parseUnits('2', 18),

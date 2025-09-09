@@ -126,6 +126,16 @@ export function warmStorageCallHandler(data: Hex, options: JSONRPCOptions): Hex 
       )
     }
 
+    case 'sessionKeyRegistry': {
+      if (!options.warmStorage?.sessionKeyRegistry) {
+        throw new Error('Warm Storage: sessionKeyRegistry is not defined')
+      }
+      return encodeAbiParameters(
+        [{ name: '', internalType: 'address', type: 'address' }],
+        options.warmStorage.sessionKeyRegistry(args)
+      )
+    }
+
     case 'getServicePrice': {
       if (!options.warmStorage?.getServicePrice) {
         throw new Error('Warm Storage: getServicePrice is not defined')
@@ -135,6 +145,7 @@ export function warmStorageCallHandler(data: Hex, options: JSONRPCOptions): Hex 
         options.warmStorage.getServicePrice(args)
       )
     }
+
     default: {
       throw new Error(`Warm Storage: unknown function: ${functionName} with args: ${args}`)
     }

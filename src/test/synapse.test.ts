@@ -255,58 +255,15 @@ describe('Synapse', () => {
     })
 
     it('should create storage context with session key', async () => {
-      extendMockProviderCall(mockProvider, async (transaction: any) => {
-        const data = transaction.data
-        const target = transaction.to
-        if (data?.startsWith('0x967c6f21')) {
-          // getClientDataSets(address)
-          assert.equal(target, MOCK_ADDRESSES.WARM_STORAGE_VIEW)
-          return ethers.AbiCoder.defaultAbiCoder().encode(
-            ['tuple(uint256,uint256,uint256,address,address,address,uint256,uint256,uint256,uint256,uint256)[]'],
-            [[]]
-          )
-        }
-        if (data?.startsWith('0x266afe1b')) {
-          // getApprovedProviders()
-          assert.equal(target, MOCK_ADDRESSES.WARM_STORAGE_VIEW)
-          return ethers.AbiCoder.defaultAbiCoder().encode(['uint256[]'], [[BigInt(1)]])
-        }
-        if (data?.startsWith('0x5c42d079')) {
-          // getProvider(uint256)
-          assert.equal(target, '0x0000000000000000000000000000000000000001')
-          const providerId = parseInt(callData.slice(10, 74), 16)
-          assert.equal(providerId, 1)
-          return ethers.AbiCoder.defaultAbiCoder().encode(
-            ['tuple(address serviceProvider, address payee, string name, string description, bool isActive)'],
-            [
-              [
-                '0x9999999999999999999999999999999999999999',
-                '0xaeeaeeaeeaeeaeeaeeaeeaeeaeeaeeaeeaeeaeee',
-                'mockProvider',
-                'mockProvider description',
-                true,
-              ],
-            ]
-          )
-        }
-        if (data?.startsWith('0xb6133b7a')) {
-          // isProviderApproved(uint256)
-          assert.equal(target, MOCK_ADDRESSES.WARM_STORAGE_VIEW)
-          return ethers.AbiCoder.defaultAbiCoder().encode(['bool'], [true])
-        }
-        return null
-      })
-
-      const synapse = await Synapse.create({ signer: mockSigner })
-      const sessionKeySigner = createMockSigner(MOCK_ADDRESSES.SESSION_KEY, mockProvider)
-      //const sessionKey = synapse.setSession(sessionKeySigner)
+      server.use(JSONRPC(presets.basic))
+      const synapse = await Synapse.create({ signer })
+      const sessionKeySigner = new ethers.Wallet(PRIVATE_KEYS.key2, provider)
+      const sessionKey = synapse.setSession(sessionKeySigner)
       const context = await synapse.storage.createContext()
       assert.equal(context['_signer'], sessionKeySigner)
 
       // Payments uses the original signer
-      /*
       const accountInfo = await synapse.payments.accountInfo()
-       */
     })
   })
 
