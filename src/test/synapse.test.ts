@@ -275,7 +275,7 @@ describe('Synapse', () => {
           // getProvider(uint256)
           assert.equal(target, '0x0000000000000000000000000000000000000001')
           const providerId = parseInt(callData.slice(10, 74), 16)
-          assert.equal(providerId, '0x0000000000000000000000000000000000000000000000000000000000000001')
+          assert.equal(providerId, 1)
           return ethers.AbiCoder.defaultAbiCoder().encode(
             ['tuple(address serviceProvider, address payee, string name, string description, bool isActive)'],
             [
