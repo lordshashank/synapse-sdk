@@ -39,6 +39,8 @@ export type viewContractAddress = ExtractAbiFunction<typeof CONTRACT_ABIS.WARM_S
 
 export type serviceProviderRegistry = ExtractAbiFunction<typeof CONTRACT_ABIS.WARM_STORAGE, 'serviceProviderRegistry'>
 
+export type sessionKeyRegistry = ExtractAbiFunction<typeof CONTRACT_ABIS.WARM_STORAGE, 'sessionKeyRegistry'>
+
 export type getServicePrice = ExtractAbiFunction<typeof CONTRACT_ABIS.WARM_STORAGE, 'getServicePrice'>
 
 export interface WarmStorageOptions {
@@ -54,6 +56,7 @@ export interface WarmStorageOptions {
   serviceProviderRegistry?: (
     args: AbiToType<serviceProviderRegistry['inputs']>
   ) => AbiToType<serviceProviderRegistry['outputs']>
+  sessionKeyRegistry?: (args: AbiToType<sessionKeyRegistry['inputs']>) => AbiToType<sessionKeyRegistry['outputs']>
   getServicePrice?: (args: AbiToType<getServicePrice['inputs']>) => AbiToType<getServicePrice['outputs']>
 }
 
