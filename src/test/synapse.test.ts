@@ -260,7 +260,7 @@ describe('Synapse', () => {
 
     beforeEach(() => {
       originalFetch = global.fetch
-      // Default mock for ping validation - can be overridden in specific tests
+      // Default mock for ping validation
       global.fetch = async (input: string | URL | Request) => {
         const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
         if (url.includes('/ping')) {
@@ -286,7 +286,7 @@ describe('Synapse', () => {
               const user = args[1]
               assert.equal(user, signerAddress)
               assert.equal(token, ADDRESSES.calibration.usdfcToken)
-              return [BigInt(0), BigInt(0), BigInt(0), BigInt(0)]
+              return [BigInt(127001), BigInt(0), BigInt(0), BigInt(0)]
             },
           },
         })
@@ -294,11 +294,15 @@ describe('Synapse', () => {
       const synapse = await Synapse.create({ signer })
       const sessionKeySigner = new ethers.Wallet(PRIVATE_KEYS.key2, provider)
       const sessionKey = synapse.setSession(sessionKeySigner)
+      assert.equal(sessionKey.getSigner(), sessionKeySigner)
+
       const context = await synapse.storage.createContext()
+      // biome-ignore lint/complexity/useLiteralKeys: checking private
       assert.equal(context['_signer'], sessionKeySigner)
 
       // Payments uses the original signer
       const accountInfo = await synapse.payments.accountInfo()
+      assert.equal(accountInfo.funds, BigInt(127001))
     })
   })
 
