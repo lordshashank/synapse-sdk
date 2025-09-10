@@ -18,6 +18,7 @@ export type AbiToType<
 export interface JSONRPCOptions {
   debug?: boolean
   eth_chainId?: string
+  eth_blockNumber?: string
   eth_accounts?: string[]
   warmStorage?: WarmStorageOptions
   pdpVerifier?: PDPVerifierOptions

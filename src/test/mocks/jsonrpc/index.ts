@@ -102,6 +102,12 @@ function handler(body: RpcRequest, options: JSONRPCOptions) {
       }
       return options.eth_chainId
     }
+    case 'eth_blockNumber': {
+      if (!options.eth_blockNumber) {
+        throw new Error('eth_blockNumber is not defined')
+      }
+      return options.eth_blockNumber
+    }
     case 'eth_accounts':
       if (!options.eth_accounts) {
         throw new Error('eth_accounts is not defined')
@@ -200,7 +206,8 @@ function multicall3CallHandler(data: Hex, options: JSONRPCOptions): Hex {
 export const presets = {
   basic: {
     debug: false,
-    eth_chainId: '314159',
+    eth_chainId: '0x4cb2f', // 314159
+    eth_blockNumber: '0x127001',
     eth_accounts: [ADDRESSES.client1],
     warmStorage: {
       pdpVerifierAddress: () => [ADDRESSES.calibration.pdpVerifier],
