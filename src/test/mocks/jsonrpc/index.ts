@@ -315,6 +315,7 @@ export const presets = {
         BigInt(5000000), // lockupUsed
         BigInt(86400), // maxLockupPeriod
       ],
+      accounts: () => [BigInt(0), BigInt(0), BigInt(0), BigInt(0)],
     },
   } as RequiredDeep<JSONRPCOptions>,
 }

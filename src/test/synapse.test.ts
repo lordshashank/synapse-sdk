@@ -286,7 +286,7 @@ describe('Synapse', () => {
               const user = args[1]
               assert.equal(user, signerAddress)
               assert.equal(token, ADDRESSES.calibration.usdfcToken)
-              return [0, 0, 0, 0]
+              return [BigInt(0), BigInt(0), BigInt(0), BigInt(0)]
             },
           },
         })
