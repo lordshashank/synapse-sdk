@@ -224,6 +224,25 @@ export class Synapse {
     return this._signer
   }
 
+  /**
+   * Sets the signer as the session key for storage actions
+   * @param sessionKeySigner The session key signer
+   * @returns The SessionKey object for this signer
+   * @example
+   * ```typescript
+   * const sessionKey = synapse.setSession(privateKey)
+   *
+   * // check for previous login
+   * await sessionKey.fetchExpiries()
+   * const HOUR_MILLIS = 1000 * 60 * 60
+   * if (sessionKey.expiries[ADD_PIECES_TYPEHASH] * 1000 < Date.now() + HOUR_MILLIS) {
+   *   const DAY_MILLIS = 24 * HOUR_MILLIS
+   *   await sessionKey.login(BigInt(Date.now() / 1000 + 30 * DAY_MILLIS), PDP_PERMISSIONS)
+   * }
+   *
+   * const context = await synapse.storage.createContext()
+   * ```
+   */
   setSession(sessionKeySigner: ethers.Signer): SessionKey {
     this._session = new SessionKey(
       this._provider,

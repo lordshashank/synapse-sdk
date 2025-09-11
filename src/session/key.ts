@@ -1,3 +1,23 @@
+/**
+ * SessionKey - Tracks the user's approval of a session key
+ *
+ * Session keys allow the user to authorize an app to take actions on
+ * their behalf without prompting their wallet for signatures.
+ * Session keys have a scope and an expiration.
+ * Session keys should be generated on the user's computer and persisted
+ * in a safe place or discarded.
+ *
+ * @example
+ * ```typescript
+ * const sessionKey = synapse.setSession(privateKey)
+ * await sessionKey.fetchExpiries()
+ * if (sessionKey.expiries[ADD_PIECES_TYPEHASH] * 1000 < Date.now() + HOUR_MILLIS) {
+ *   const DAY_MILLIS = 24 * HOUR_MILLIS
+ *   await sessionKey.login(BigInt(Date.now() / 1000 + 30 * DAY_MILLIS), PDP_PERMISSIONS)
+ * }
+ * ```
+ */
+
 import { ethers } from 'ethers'
 import { CONTRACT_ABIS, CONTRACT_ADDRESSES, getFilecoinNetworkType } from '../utils/index.ts'
 
