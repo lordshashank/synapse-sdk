@@ -281,12 +281,28 @@ describe('Synapse', () => {
           ...presets.basic,
           payments: {
             ...presets.basic.payments,
+            operatorApprovals: (args) => {
+              const token = args[0]
+              const client = args[1]
+              const operator = args[2]
+              assert.equal(token, ADDRESSES.calibration.usdfcToken)
+              assert.equal(client, signerAddress)
+              assert.equal(operator, ADDRESSES.calibration.warmStorage)
+              return [
+                true, // isApproved
+                BigInt(127001 * 635000000), // rateAllowance
+                BigInt(127001 * 635000000), // lockupAllowance
+                BigInt(0), // rateUsage
+                BigInt(0), // lockupUsage
+                BigInt(28800), // maxLockupPeriod
+              ]
+            },
             accounts: (args) => {
               const token = args[0]
               const user = args[1]
               assert.equal(user, signerAddress)
               assert.equal(token, ADDRESSES.calibration.usdfcToken)
-              return [BigInt(127001), BigInt(0), BigInt(0), BigInt(0)]
+              return [BigInt(127001 * 635000000), BigInt(0), BigInt(0), BigInt(0)]
             },
           },
         })
@@ -299,10 +315,12 @@ describe('Synapse', () => {
       const context = await synapse.storage.createContext()
       // biome-ignore lint/complexity/useLiteralKeys: checking private
       assert.equal(context['_signer'], sessionKeySigner)
+      const info = await context.preflightUpload(127)
+      assert.isTrue(info.allowanceCheck.sufficient)
 
       // Payments uses the original signer
       const accountInfo = await synapse.payments.accountInfo()
-      assert.equal(accountInfo.funds, BigInt(127001))
+      assert.equal(accountInfo.funds, BigInt(127001 * 635000000))
     })
   })
 
