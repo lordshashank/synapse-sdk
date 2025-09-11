@@ -2,6 +2,7 @@ import type { AbiParameter, AbiParameterKind, AbiParametersToPrimitiveTypes } fr
 import type { PaymentsOptions } from './payments.ts'
 import type { PDPVerifierOptions } from './pdp.ts'
 import type { ServiceRegistryOptions } from './service-registry.ts'
+import type { SessionKeyRegistryOptions } from './session-key-registry.ts'
 import type { WarmStorageOptions, WarmStorageViewOptions } from './warm-storage.ts'
 
 /**
@@ -25,6 +26,7 @@ export interface JSONRPCOptions {
   payments?: PaymentsOptions
   warmStorageView?: WarmStorageViewOptions
   serviceRegistry?: ServiceRegistryOptions
+  sessionKeyRegistry?: SessionKeyRegistryOptions
 }
 
 /**

@@ -13,6 +13,7 @@ import { CONTRACT_ADDRESSES } from '../../../utils/constants.ts'
 import { paymentsCallHandler } from './payments.ts'
 import { pdpVerifierCallHandler } from './pdp.ts'
 import { serviceProviderRegistryCallHandler } from './service-registry.ts'
+import { sessionKeyRegistryCallHandler } from './session-key-registry.ts'
 import type { JSONRPCOptions, RpcRequest, RpcResponse } from './types.ts'
 import { warmStorageCallHandler, warmStorageViewCallHandler } from './warm-storage.ts'
 
@@ -129,6 +130,10 @@ function handler(body: RpcRequest, options: JSONRPCOptions) {
 
       if (isAddressEqual(ADDRESSES.calibration.spRegistry, to as Address)) {
         return serviceProviderRegistryCallHandler(data as Hex, options)
+      }
+
+      if (isAddressEqual(ADDRESSES.calibration.sessionKeyRegistry, to as Address)) {
+        return sessionKeyRegistryCallHandler(data as Hex, options)
       }
 
       if (isAddressEqual(ADDRESSES.calibration.viewContract, to as Address)) {
@@ -312,6 +317,9 @@ export const presets = {
           },
         ]
       },
+    },
+    sessionKeyRegistry: {
+      authorizationExpiry: () => [BigInt(0)],
     },
     payments: {
       operatorApprovals: () => [
