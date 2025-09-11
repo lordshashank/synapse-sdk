@@ -13,6 +13,7 @@ import { type Address, isAddressEqual, parseUnits } from 'viem'
 import { PaymentsService } from '../payments/index.ts'
 import { Synapse } from '../synapse.ts'
 import { ADDRESSES, JSONRPC, PRIVATE_KEYS, presets } from './mocks/jsonrpc/index.ts'
+import { PING } from './mocks/ping.ts'
 
 // mock server for testing
 const server = setup([])
@@ -256,22 +257,8 @@ describe('Synapse', () => {
   })
 
   describe('Session Keys', () => {
-    let originalFetch: typeof global.fetch
-
     beforeEach(() => {
-      originalFetch = global.fetch
-      // Default mock for ping validation
-      global.fetch = async (input: string | URL | Request, init?: RequestInit | undefined) => {
-        const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
-        if (url.includes('/ping')) {
-          return { status: 200, statusText: 'OK' } as any
-        }
-        return await originalFetch(input, init)
-      }
-    })
-
-    afterEach(() => {
-      global.fetch = originalFetch
+      server.use(PING())
     })
 
     it('should storage.createContext with session key', async () => {
