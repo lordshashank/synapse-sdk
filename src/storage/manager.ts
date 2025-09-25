@@ -37,7 +37,15 @@ import type {
   UploadCallbacks,
   UploadResult,
 } from '../types.ts'
-import { createError, SIZE_CONSTANTS, TIME_CONSTANTS, TOKENS } from '../utils/index.ts'
+import {
+  combineMetadata,
+  createError,
+  METADATA_KEYS,
+  metadataMatches,
+  SIZE_CONSTANTS,
+  TIME_CONSTANTS,
+  TOKENS,
+} from '../utils/index.ts'
 import { ProviderResolver } from '../utils/provider-resolver.ts'
 import type { WarmStorageService } from '../warm-storage/index.ts'
 import { StorageContext } from './context.ts'
@@ -45,18 +53,46 @@ import { StorageContext } from './context.ts'
 // Combined callbacks type that can include both creation and upload callbacks
 type CombinedCallbacks = StorageCreationCallbacks & UploadCallbacks
 
+/**
+ * Upload options for StorageManager.upload() - the all-in-one upload method
+ *
+ * This is the "uber-shortcut" method that can handle everything from context
+ * creation to piece upload in a single call. It combines:
+ * - Storage context creation options (provider selection, data set creation)
+ * - Upload callbacks (both creation and upload progress)
+ * - Piece-specific metadata
+ *
+ * Usage patterns:
+ * 1. With explicit context: `{ context, callbacks?, metadata? }` - routes to context.upload()
+ * 2. Auto-create context: `{ providerId?, dataSetId?, withCDN?, callbacks?, metadata? }` - creates/reuses context
+ * 3. Use default context: `{ callbacks?, metadata? }` - uses cached default context
+ *
+ * @internal This type is intentionally not exported as it's specific to StorageManager
+ */
 interface StorageManagerUploadOptions {
-  // Context routing
+  // Context routing - if provided, all other context options are invalid
   context?: StorageContext
-  // OR auto-context options (from StorageServiceOptions)
+
+  // Auto-context creation options (from StorageServiceOptions)
+  // These are ignored if 'context' is provided
+  /** Specific provider ID to use */
   providerId?: number
+  /** Specific provider address to use */
   providerAddress?: string
+  /** Specific data set ID to use */
   dataSetId?: number
+  /** Whether to enable CDN services */
   withCDN?: boolean
+  /** Force creation of a new data set */
   forceCreateDataSet?: boolean
+  /** Maximum uploads per batch (default: 32) */
   uploadBatchSize?: number
+
   // Callbacks that can include both creation and upload callbacks
   callbacks?: Partial<CombinedCallbacks>
+
+  // Metadata for this specific piece upload
+  metadata?: Record<string, string>
 }
 
 interface StorageManagerDownloadOptions extends DownloadOptions {
@@ -122,8 +158,11 @@ export class StorageManager {
         callbacks: options?.callbacks,
       }))
 
-    // Upload using the context
-    return await context.upload(data, options?.callbacks)
+    // Upload using the context with piece metadata
+    return await context.upload(data, {
+      ...options?.callbacks,
+      metadata: options?.metadata,
+    })
   }
 
   /**
@@ -189,15 +228,29 @@ export class StorageManager {
   /**
    * Run preflight checks for an upload without creating a context
    * @param size - The size of data to upload in bytes
-   * @param options - Optional settings including withCDN flag
+   * @param options - Optional settings including withCDN flag and/or metadata
    * @returns Preflight information including costs and allowances
    */
-  async preflightUpload(size: number, options?: { withCDN?: boolean }): Promise<PreflightInfo> {
-    // Use withCDN setting: option > manager default
-    const withCDN = options?.withCDN ?? this._withCDN
+  async preflightUpload(
+    size: number,
+    options?: { withCDN?: boolean; metadata?: Record<string, string> }
+  ): Promise<PreflightInfo> {
+    // Determine withCDN from metadata if provided, otherwise use option > manager default
+    let withCDN = options?.withCDN ?? this._withCDN
+
+    // Check metadata for withCDN key - this takes precedence
+    if (options?.metadata != null && METADATA_KEYS.WITH_CDN in options.metadata) {
+      // The withCDN metadata entry should always have an empty string value by convention,
+      // but the contract only checks for key presence, not value
+      const value = options.metadata[METADATA_KEYS.WITH_CDN]
+      if (value !== '') {
+        console.warn(`Warning: withCDN metadata entry has unexpected value "${value}". Expected empty string.`)
+      }
+      withCDN = true // Enable CDN when key exists (matches contract behavior)
+    }
 
     // Use the static method from StorageContext for core logic
-    return await StorageContext.performPreflightCheck(size, withCDN, this._warmStorageService, this._synapse.payments)
+    return await StorageContext.performPreflightCheck(this._warmStorageService, this._synapse.payments, size, withCDN)
   }
 
   /**
@@ -210,7 +263,7 @@ export class StorageManager {
     // Check if we can return the default context
     // We can use the default if:
     // 1. No options provided, OR
-    // 2. Only withCDN and/or callbacks are provided (callbacks can fire for cached context)
+    // 2. Only withCDN, metadata and/or callbacks are provided (callbacks can fire for cached context)
     const canUseDefault =
       options == null ||
       (options.providerId == null &&
@@ -220,11 +273,13 @@ export class StorageManager {
         options.uploadBatchSize == null)
 
     if (canUseDefault) {
-      // Check if we have a default context with matching CDN setting
+      // Check if we have a default context with compatible metadata
       if (this._defaultContext != null) {
-        // Check if the CDN setting matches
-        const defaultHasCDN = (this._defaultContext as any).withCDN ?? this._withCDN
-        if (defaultHasCDN === effectiveWithCDN) {
+        // Combine the current request metadata with effective withCDN setting
+        const requestedMetadata = combineMetadata(options?.metadata, effectiveWithCDN)
+
+        // Check if the requested metadata matches what the default context was created with
+        if (metadataMatches(this._defaultContext.dataSetMetadata, requestedMetadata)) {
           // Fire callbacks for cached context to ensure consistent behavior
           if (options?.callbacks != null) {
             try {
@@ -249,8 +304,8 @@ export class StorageManager {
 
       // Create new default context with current CDN setting
       const context = await StorageContext.create(this._synapse, this._warmStorageService, {
+        ...options,
         withCDN: effectiveWithCDN,
-        callbacks: options?.callbacks,
       })
       this._defaultContext = context
       return context
@@ -278,6 +333,16 @@ export class StorageManager {
   async findDataSets(clientAddress?: string): Promise<EnhancedDataSetInfo[]> {
     const address = clientAddress ?? (await this._synapse.getClient().getAddress())
     return await this._warmStorageService.getClientDataSetsWithDetails(address)
+  }
+
+  /**
+   * Terminate a data set with given ID that belongs to the synapse signer.
+   * This will also result in the removal of all pieces in the data set.
+   * @param dataSetId - The ID of the data set to terminate
+   * @returns Transaction response
+   */
+  async terminateDataSet(dataSetId: number): Promise<ethers.TransactionResponse> {
+    return this._warmStorageService.terminateDataSet(this._synapse.getSigner(), dataSetId)
   }
 
   /**

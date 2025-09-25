@@ -1,3 +1,28 @@
+## [0.28.0](https://github.com/FilOzone/synapse-sdk/compare/v0.27.0...v0.28.0) (2025-09-19)
+
+### Features
+
+* add terminateDataSet functionality ([#230](https://github.com/FilOzone/synapse-sdk/issues/230)) ([ffaacac](https://github.com/FilOzone/synapse-sdk/commit/ffaacac507b4882abfc33d3de72fe9fa98843cd2))
+
+## [0.27.0](https://github.com/FilOzone/synapse-sdk/compare/v0.26.0...v0.27.0) (2025-09-19)
+
+### Features
+
+* allow custom metadata for data sets & roots ([fe41931](https://github.com/FilOzone/synapse-sdk/commit/fe4193181e1af214e702f7ecd877713e16ba5964)), closes [#201](https://github.com/FilOzone/synapse-sdk/issues/201)
+* expose metadata as Record<string,string>; check constraints ([68ed29b](https://github.com/FilOzone/synapse-sdk/commit/68ed29bc0a2890b09d82990e4c983cc65768dab1))
+* match data set for auto-selection based on all metadata (unordered) ([50eb97a](https://github.com/FilOzone/synapse-sdk/commit/50eb97ac1098b2997f073487ea1ad7c3cbb738a6))
+
+### Bug Fixes
+
+* exact match of metadata, ignoring order, when selecting data set to reuse ([5f80a64](https://github.com/FilOzone/synapse-sdk/commit/5f80a64a43d2fe8c11727a4337b7939ec921985a))
+* pass metadata to context create, match cached contexts on metadata ([967f272](https://github.com/FilOzone/synapse-sdk/commit/967f2727aeacf4695d7e166276dcc58adb5dd1cd))
+
+## [0.26.0](https://github.com/FilOzone/synapse-sdk/compare/v0.25.1...v0.26.0) (2025-09-19)
+
+### Features
+
+* add mainnet address, add --network flag to sp-tool ([#231](https://github.com/FilOzone/synapse-sdk/issues/231)) ([d0b5242](https://github.com/FilOzone/synapse-sdk/commit/d0b5242fafec72b0f295df05bc3c2219c754b9e3))
+
 ## [0.25.1](https://github.com/FilOzone/synapse-sdk/compare/v0.25.0...v0.25.1) (2025-09-15)
 
 ### Bug Fixes

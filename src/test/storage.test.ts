@@ -1,9 +1,10 @@
 /* globals describe it beforeEach afterEach */
 import { assert } from 'chai'
 import { ethers } from 'ethers'
-import { StorageService } from '../storage/service.ts'
+import { StorageContext } from '../storage/context.ts'
 import type { Synapse } from '../synapse.ts'
 import type { PieceCID, ProviderInfo, UploadResult } from '../types.ts'
+import { SIZE_CONSTANTS } from '../utils/constants.ts'
 import { createMockProviderInfo, createSimpleProvider, setupProviderRegistryMocks } from './test-utils.ts'
 
 // Create a mock Ethereum provider that doesn't try to connect
@@ -109,6 +110,10 @@ function createMockWarmStorageService(providers: ProviderInfo[], dataSets: any[]
     getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
     getApprovedProviderIds: async () => providers.map((p) => p.id),
     isProviderIdApproved: async (id: number) => providers.some((p) => p.id === id),
+    getDataSetMetadata: async (dataSetId: number) => {
+      const dataSet = dataSets.find((d) => d.pdpVerifierDataSetId === dataSetId)
+      return dataSet?.metadata ?? {}
+    },
     ...overrides,
   } as any
 }
@@ -236,7 +241,7 @@ describe('StorageService', () => {
           isManaged: true,
           withCDN: false,
           commissionBps: 0,
-          metadata: '',
+          metadata: {},
           pieceMetadata: [],
           clientDataSetId: 1,
         },
@@ -252,7 +257,7 @@ describe('StorageService', () => {
           isManaged: true,
           withCDN: false,
           commissionBps: 0,
-          metadata: '',
+          metadata: {},
           pieceMetadata: [],
           clientDataSetId: 2,
         },
@@ -267,7 +272,7 @@ describe('StorageService', () => {
       const mockWarmStorageService = createMockWarmStorageService(mockProviders, dataSets)
 
       // Create storage service without specifying providerId
-      const service = await StorageService.create(mockSynapse, mockWarmStorageService, {})
+      const service = await StorageContext.create(mockSynapse, mockWarmStorageService, {})
 
       // Should have selected one of the providers
       assert.isTrue(
@@ -292,7 +297,7 @@ describe('StorageService', () => {
           isManaged: true,
           withCDN: false,
           commissionBps: 0,
-          metadata: '',
+          metadata: {},
           pieceMetadata: [],
           clientDataSetId: 1,
         },
@@ -312,7 +317,7 @@ describe('StorageService', () => {
       })
 
       // Create storage service with specific providerId
-      const service = await StorageService.create(mockSynapse, mockWarmStorageService, {
+      const service = await StorageContext.create(mockSynapse, mockWarmStorageService, {
         providerId: 3,
       })
 
@@ -329,7 +334,7 @@ describe('StorageService', () => {
       const mockWarmStorageService = createMockWarmStorageService([], [])
 
       try {
-        await StorageService.create(mockSynapse, mockWarmStorageService, {})
+        await StorageContext.create(mockSynapse, mockWarmStorageService, {})
         assert.fail('Should have thrown error')
       } catch (error: any) {
         assert.include(error.message, 'No approved service providers available')
@@ -352,7 +357,7 @@ describe('StorageService', () => {
       })
 
       try {
-        await StorageService.create(mockSynapse, mockWarmStorageService, {
+        await StorageContext.create(mockSynapse, mockWarmStorageService, {
           providerId: 999,
         })
         assert.fail('Should have thrown error')
@@ -377,7 +382,7 @@ describe('StorageService', () => {
           isManaged: true,
           withCDN: false,
           commissionBps: 0,
-          metadata: '',
+          metadata: {},
           pieceMetadata: [],
           clientDataSetId: 1,
         },
@@ -393,7 +398,7 @@ describe('StorageService', () => {
         getApprovedProvider: async () => mockProvider,
       })
 
-      const service = await StorageService.create(mockSynapse, mockWarmStorageService, {
+      const service = await StorageContext.create(mockSynapse, mockWarmStorageService, {
         providerId: 3,
       })
 
@@ -423,7 +428,7 @@ describe('StorageService', () => {
           isManaged: true,
           withCDN: false,
           commissionBps: 0,
-          metadata: '',
+          metadata: {},
           pieceMetadata: [],
           clientDataSetId: 1,
         },
@@ -439,7 +444,7 @@ describe('StorageService', () => {
           isManaged: true,
           withCDN: false,
           commissionBps: 0,
-          metadata: '',
+          metadata: {},
           pieceMetadata: [],
           clientDataSetId: 2,
         },
@@ -455,7 +460,7 @@ describe('StorageService', () => {
         getApprovedProvider: async () => mockProvider,
       })
 
-      const service = await StorageService.create(mockSynapse, mockWarmStorageService, {
+      const service = await StorageContext.create(mockSynapse, mockWarmStorageService, {
         providerId: 3,
       })
 
@@ -482,7 +487,7 @@ describe('StorageService', () => {
           isManaged: true,
           withCDN: false,
           commissionBps: 0,
-          metadata: '',
+          metadata: {},
           pieceMetadata: [],
           clientDataSetId: 1,
         },
@@ -498,7 +503,7 @@ describe('StorageService', () => {
         getApprovedProvider: async () => mockProvider,
       })
 
-      await StorageService.create(mockSynapse, mockWarmStorageService, {
+      await StorageContext.create(mockSynapse, mockWarmStorageService, {
         providerId: 3,
         callbacks: {
           onProviderSelected: (provider) => {
@@ -533,7 +538,7 @@ describe('StorageService', () => {
           isManaged: true,
           withCDN: false,
           commissionBps: 0,
-          metadata: '',
+          metadata: {},
           pieceMetadata: [],
           clientDataSetId: 1,
         },
@@ -556,7 +561,7 @@ describe('StorageService', () => {
         },
       })
 
-      const service = await StorageService.create(mockSynapse, mockWarmStorageService, {
+      const service = await StorageContext.create(mockSynapse, mockWarmStorageService, {
         dataSetId: 456,
       })
 
@@ -580,7 +585,7 @@ describe('StorageService', () => {
           isManaged: true,
           withCDN: false,
           commissionBps: 0,
-          metadata: '',
+          metadata: {},
           pieceMetadata: [],
           clientDataSetId: 1,
         },
@@ -603,7 +608,7 @@ describe('StorageService', () => {
         },
       })
 
-      const service = await StorageService.create(mockSynapse, mockWarmStorageService, {
+      const service = await StorageContext.create(mockSynapse, mockWarmStorageService, {
         providerAddress: mockProvider.serviceProvider,
       })
 
@@ -621,7 +626,7 @@ describe('StorageService', () => {
       const mockWarmStorageService = createMockWarmStorageService([], [])
 
       try {
-        await StorageService.create(mockSynapse, mockWarmStorageService, {
+        await StorageContext.create(mockSynapse, mockWarmStorageService, {
           dataSetId: 999,
         })
         assert.fail('Should have thrown error')
@@ -646,7 +651,7 @@ describe('StorageService', () => {
           isManaged: true,
           withCDN: false,
           commissionBps: 0,
-          metadata: '',
+          metadata: {},
           pieceMetadata: [],
           clientDataSetId: 1,
         },
@@ -669,7 +674,7 @@ describe('StorageService', () => {
       })
 
       try {
-        await StorageService.create(mockSynapse, mockWarmStorageService, {
+        await StorageContext.create(mockSynapse, mockWarmStorageService, {
           dataSetId: 111,
           providerId: 3, // Conflicts with actual owner
         })
@@ -699,7 +704,7 @@ describe('StorageService', () => {
       })
 
       try {
-        await StorageService.create(mockSynapse, mockWarmStorageService, {
+        await StorageContext.create(mockSynapse, mockWarmStorageService, {
           providerAddress: '0x6666666666666666666666666666666666666666',
         })
         assert.fail('Should have thrown error')
@@ -731,7 +736,7 @@ describe('StorageService', () => {
           isManaged: true,
           withCDN: false, // No CDN
           commissionBps: 0,
-          metadata: '',
+          metadata: {},
           pieceMetadata: [],
           clientDataSetId: 1,
         },
@@ -746,7 +751,7 @@ describe('StorageService', () => {
           isManaged: true,
           withCDN: true, // With CDN
           commissionBps: 0,
-          metadata: '',
+          metadata: {},
           pieceMetadata: [],
           clientDataSetId: 2,
         },
@@ -772,13 +777,13 @@ describe('StorageService', () => {
 
       try {
         // Test with CDN = false
-        const serviceNoCDN = await StorageService.create(mockSynapse, mockWarmStorageService, {
+        const serviceNoCDN = await StorageContext.create(mockSynapse, mockWarmStorageService, {
           withCDN: false,
         })
         assert.equal(serviceNoCDN.dataSetId, 200, 'Should select non-CDN data set')
 
         // Test with CDN = true
-        const serviceWithCDN = await StorageService.create(mockSynapse, mockWarmStorageService, {
+        const serviceWithCDN = await StorageContext.create(mockSynapse, mockWarmStorageService, {
           withCDN: true,
         })
         assert.equal(serviceWithCDN.dataSetId, 201, 'Should select CDN data set')
@@ -801,7 +806,7 @@ describe('StorageService', () => {
           isManaged: false, // Not managed by current WarmStorage
           withCDN: false,
           commissionBps: 0,
-          metadata: '',
+          metadata: {},
           pieceMetadata: [],
           clientDataSetId: 1,
         },
@@ -818,7 +823,7 @@ describe('StorageService', () => {
       const mockWarmStorageService = createMockWarmStorageService([mockProvider], mockDataSets)
 
       // Should create new data set since existing one is not managed
-      const service = await StorageService.create(mockSynapse, mockWarmStorageService, {})
+      const service = await StorageContext.create(mockSynapse, mockWarmStorageService, {})
 
       // Should have selected a provider but no existing data set
       assert.exists(service.serviceProvider)
@@ -839,7 +844,7 @@ describe('StorageService', () => {
           isManaged: true,
           withCDN: false,
           commissionBps: 0,
-          metadata: '',
+          metadata: {},
           pieceMetadata: [],
           clientDataSetId: 1,
         },
@@ -859,7 +864,7 @@ describe('StorageService', () => {
       } as any
 
       try {
-        await StorageService.create(mockSynapse, mockWarmStorageService, {
+        await StorageContext.create(mockSynapse, mockWarmStorageService, {
           dataSetId: 400,
         })
         assert.fail('Should have thrown error')
@@ -882,7 +887,7 @@ describe('StorageService', () => {
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
 
-      const service = await StorageService.create(mockSynapse, mockWarmStorageService, {
+      const service = await StorageContext.create(mockSynapse, mockWarmStorageService, {
         providerId: 11,
       })
 
@@ -921,7 +926,7 @@ describe('StorageService', () => {
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
 
-      await StorageService.create(mockSynapse, mockWarmStorageService, {
+      await StorageContext.create(mockSynapse, mockWarmStorageService, {
         providerId: 12,
       })
 
@@ -959,7 +964,7 @@ describe('StorageService', () => {
           isManaged: true,
           withCDN: false,
           commissionBps: 0,
-          metadata: '',
+          metadata: {},
           pieceMetadata: [],
           clientDataSetId: 1,
         },
@@ -990,7 +995,7 @@ describe('StorageService', () => {
       }
 
       try {
-        const service = await StorageService.create(mockSynapse, mockWarmStorageService, {})
+        const service = await StorageContext.create(mockSynapse, mockWarmStorageService, {})
 
         assert.isTrue(getClientDataSetsCalled, 'Should fetch client data sets')
         assert.isFalse(getAllApprovedProvidersCalled, 'Should NOT fetch all providers')
@@ -1020,7 +1025,7 @@ describe('StorageService', () => {
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
 
-      await StorageService.create(mockSynapse, mockWarmStorageService, {})
+      await StorageContext.create(mockSynapse, mockWarmStorageService, {})
 
       assert.isTrue(getAllApprovedProvidersCalled, 'Should fetch all providers when no data sets')
     })
@@ -1038,7 +1043,7 @@ describe('StorageService', () => {
           isManaged: true,
           withCDN: false,
           commissionBps: 0,
-          metadata: '',
+          metadata: {},
           pieceMetadata: [],
           clientDataSetId: 1,
         },
@@ -1050,7 +1055,7 @@ describe('StorageService', () => {
       } as any
 
       try {
-        await StorageService.create(mockSynapse, mockWarmStorageService, {
+        await StorageContext.create(mockSynapse, mockWarmStorageService, {
           dataSetId: 600,
         })
         assert.fail('Should have thrown error')
@@ -1072,7 +1077,7 @@ describe('StorageService', () => {
           isManaged: true,
           withCDN: false,
           commissionBps: 0,
-          metadata: '',
+          metadata: {},
           pieceMetadata: [],
           clientDataSetId: 1,
         },
@@ -1113,7 +1118,7 @@ describe('StorageService', () => {
       } as any
 
       try {
-        await StorageService.create(mockSynapse, mockWarmStorageService, {
+        await StorageContext.create(mockSynapse, mockWarmStorageService, {
           dataSetId: 700,
           providerAddress: '0x9999888877776666555544443333222211110000', // Different address
         })
@@ -1167,6 +1172,7 @@ describe('StorageService', () => {
           cdnRailId: 0,
           cdnEndEpoch: 0,
           cacheMissRailId: 0,
+          metadata: {},
         },
       ]
 
@@ -1185,6 +1191,11 @@ describe('StorageService', () => {
         getAllApprovedProviders: async () => [provider2WithDifferentPayee],
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
         isProviderIdApproved: async (id: number) => id === 2,
+        getApprovedProviderIds: async () => [2],
+        getDataSetMetadata: async (dataSetId: number) => {
+          const dataSet = mockDataSets.find((d) => d.pdpVerifierDataSetId === dataSetId)
+          return dataSet?.metadata ?? {}
+        },
       } as any
 
       // Mock fetch for ping validation
@@ -1198,7 +1209,7 @@ describe('StorageService', () => {
       }
 
       try {
-        const service = await StorageService.create(mockSynapse, mockWarmStorageService, {})
+        const service = await StorageContext.create(mockSynapse, mockWarmStorageService, {})
 
         // Should successfully match by provider ID despite different payee
         assert.equal(service.dataSetId, 100)
@@ -1224,8 +1235,8 @@ describe('StorageService', () => {
             capabilities: {},
             data: {
               serviceURL: 'https://provider3.example.com',
-              minPieceSizeInBytes: BigInt(1024),
-              maxPieceSizeInBytes: BigInt(1024 * 1024 * 1024),
+              minPieceSizeInBytes: SIZE_CONSTANTS.KiB,
+              maxPieceSizeInBytes: SIZE_CONSTANTS.GiB,
               ipniPiece: false,
               ipniIpfs: false,
               storagePricePerTibPerMonth: BigInt(1000000),
@@ -1256,6 +1267,7 @@ describe('StorageService', () => {
           cdnRailId: 0,
           cdnEndEpoch: 0,
           cacheMissRailId: 0,
+          metadata: {}, // Empty metadata for exact matching
         },
       ]
 
@@ -1307,7 +1319,7 @@ describe('StorageService', () => {
       }
 
       try {
-        await StorageService.create(mockSynapse, mockWarmStorageService, {})
+        await StorageContext.create(mockSynapse, mockWarmStorageService, {})
         // If we reach here without error, it means the fallback succeeded and a provider was selected
         assert.isTrue(consoleWarnCalled, 'Should have logged warning about fallback')
       } catch (_error) {
@@ -1341,11 +1353,18 @@ describe('StorageService', () => {
         }),
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
-      const preflight = await service.preflightUpload(1024 * 1024) // 1 MiB
+      const preflight = await service.preflightUpload(Number(SIZE_CONSTANTS.MiB)) // 1 MiB
 
       assert.equal(preflight.estimatedCost.perEpoch, BigInt(100))
       assert.equal(preflight.estimatedCost.perDay, BigInt(28800))
@@ -1372,11 +1391,18 @@ describe('StorageService', () => {
         }),
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: true,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: true,
+        },
+        {}
+      )
 
-      const preflight = await service.preflightUpload(1024 * 1024) // 1 MiB
+      const preflight = await service.preflightUpload(Number(SIZE_CONSTANTS.MiB)) // 1 MiB
 
       // Should use CDN costs
       assert.equal(preflight.estimatedCost.perEpoch, BigInt(200))
@@ -1405,11 +1431,18 @@ describe('StorageService', () => {
         }),
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
-      const preflight = await service.preflightUpload(100 * 1024 * 1024) // 100 MiB
+      const preflight = await service.preflightUpload(Number(100n * SIZE_CONSTANTS.MiB)) // 100 MiB
 
       assert.isFalse(preflight.allowanceCheck.sufficient)
       assert.include(preflight.allowanceCheck.message, 'Rate allowance insufficient')
@@ -1418,9 +1451,16 @@ describe('StorageService', () => {
 
     it('should enforce minimum size limit in preflightUpload', async () => {
       const mockWarmStorageService = {} as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       try {
         await service.preflightUpload(126) // 126 bytes (1 under minimum)
@@ -1436,12 +1476,19 @@ describe('StorageService', () => {
       const mockWarmStorageService = {
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       try {
-        await service.preflightUpload(210 * 1024 * 1024) // 210 MiB
+        await service.preflightUpload(Number(210n * SIZE_CONSTANTS.MiB)) // 210 MiB
         assert.fail('Should have thrown size limit error')
       } catch (error: any) {
         assert.include(error.message, 'exceeds maximum allowed size')
@@ -1470,9 +1517,16 @@ describe('StorageService', () => {
       const mockWarmStorageService = {
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
-      const service = new StorageService(mockSynapseWithDownload, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapseWithDownload,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       const downloaded = await service.download(testPieceCID)
       assert.deepEqual(downloaded, testData)
@@ -1492,9 +1546,16 @@ describe('StorageService', () => {
       const mockWarmStorageService = {
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
-      const service = new StorageService(mockSynapseWithError, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapseWithError,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       try {
         await service.download(testPieceCID)
@@ -1523,9 +1584,16 @@ describe('StorageService', () => {
       const mockWarmStorageService = {
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
-      const service = new StorageService(mockSynapseWithOptions, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapseWithOptions,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       // Test with and without empty options object
       const downloaded1 = await service.download(testPieceCID)
@@ -1541,9 +1609,16 @@ describe('StorageService', () => {
       const mockWarmStorageService = {
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       // Create data that is below the minimum
       const undersizedData = new Uint8Array(126) // 126 bytes (1 byte under minimum)
@@ -1575,9 +1650,16 @@ describe('StorageService', () => {
         },
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
       const serviceAny = service as any
 
       // Mock PDPServer methods to track calls
@@ -1689,10 +1771,17 @@ describe('StorageService', () => {
       } as any
 
       // Create service with batch size of 2
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-        uploadBatchSize: 2,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+          uploadBatchSize: 2,
+        },
+        {}
+      )
       const serviceAny = service as any
 
       // Mock PDPServer methods
@@ -1776,10 +1865,17 @@ describe('StorageService', () => {
       } as any
 
       // Create service with batch size of 1
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-        uploadBatchSize: 1,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+          uploadBatchSize: 1,
+        },
+        {}
+      )
       const serviceAny = service as any
 
       // Mock PDPServer methods
@@ -1850,9 +1946,16 @@ describe('StorageService', () => {
       } as any
 
       // Create service with default batch size (32)
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
       const serviceAny = service as any
 
       // Mock PDPServer methods
@@ -1920,10 +2023,17 @@ describe('StorageService', () => {
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
 
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-        uploadBatchSize: 2,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+          uploadBatchSize: 2,
+        },
+        {}
+      )
       const serviceAny = service as any
 
       // Mock PDPServer methods
@@ -1970,12 +2080,19 @@ describe('StorageService', () => {
 
     it('should enforce 200 MiB size limit', async () => {
       const mockWarmStorageService = {} as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       // Create data that exceeds the limit
-      const oversizedData = new Uint8Array(210 * 1024 * 1024) // 210 MiB
+      const oversizedData = new Uint8Array(Number(210n * SIZE_CONSTANTS.MiB)) // 210 MiB
 
       try {
         await service.upload(oversizedData)
@@ -1996,9 +2113,16 @@ describe('StorageService', () => {
         }),
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       // Create data at exactly the minimum
       const minSizeData = new Uint8Array(127) // 127 bytes
@@ -2064,12 +2188,19 @@ describe('StorageService', () => {
         }),
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       // Create data at exactly the limit
-      const maxSizeData = new Uint8Array(200 * 1024 * 1024) // 200 MiB
+      const maxSizeData = new Uint8Array(SIZE_CONSTANTS.MAX_UPLOAD_SIZE) // 200 MiB
       const testPieceCID = 'bafkzcibeqcad6efnpwn62p5vvs5x3nh3j7xkzfgb3xtitcdm2hulmty3xx4tl3wace'
 
       // Mock the required services
@@ -2077,7 +2208,7 @@ describe('StorageService', () => {
 
       // Mock uploadPiece
       serviceAny._pdpServer.uploadPiece = async (data: Uint8Array): Promise<any> => {
-        assert.equal(data.length, 200 * 1024 * 1024)
+        assert.equal(data.length, SIZE_CONSTANTS.MAX_UPLOAD_SIZE)
         return { pieceCid: testPieceCID, size: data.length }
       }
 
@@ -2123,7 +2254,7 @@ describe('StorageService', () => {
       // Should not throw
       const result = await service.upload(maxSizeData)
       assert.equal(result.pieceCid.toString(), testPieceCID)
-      assert.equal(result.size, 200 * 1024 * 1024)
+      assert.equal(result.size, SIZE_CONSTANTS.MAX_UPLOAD_SIZE)
       assert.equal(result.pieceId, 0)
     })
 
@@ -2136,9 +2267,16 @@ describe('StorageService', () => {
         }),
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       // Create data that meets minimum size (127 bytes)
       const testData = new Uint8Array(127).fill(42) // 127 bytes of value 42
@@ -2219,9 +2357,16 @@ describe('StorageService', () => {
         }),
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       const testData = new Uint8Array(127).fill(42)
       const testPieceCID = 'bafkzcibeqcad6efnpwn62p5vvs5x3nh3j7xkzfgb3xtitcdm2hulmty3xx4tl3wace'
@@ -2319,9 +2464,16 @@ describe('StorageService', () => {
         }),
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       const testData = new Uint8Array(127).fill(42)
       const testPieceCID = 'bafkzcibeqcad6efnpwn62p5vvs5x3nh3j7xkzfgb3xtitcdm2hulmty3xx4tl3wace'
@@ -2375,9 +2527,16 @@ describe('StorageService', () => {
         }),
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       const testData = new Uint8Array(127).fill(42)
       const testPieceCID = 'bafkzcibeqcad6efnpwn62p5vvs5x3nh3j7xkzfgb3xtitcdm2hulmty3xx4tl3wace'
@@ -2442,9 +2601,16 @@ describe('StorageService', () => {
         }),
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       const testData = new Uint8Array(127).fill(42)
       const testPieceCID = 'bafkzcibeqcad6efnpwn62p5vvs5x3nh3j7xkzfgb3xtitcdm2hulmty3xx4tl3wace'
@@ -2501,9 +2667,16 @@ describe('StorageService', () => {
         }),
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       const testData = new Uint8Array(127).fill(42)
       const testPieceCID = 'bafkzcibeqcad6efnpwn62p5vvs5x3nh3j7xkzfgb3xtitcdm2hulmty3xx4tl3wace'
@@ -2575,9 +2748,16 @@ describe('StorageService', () => {
         }),
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       // Create ArrayBuffer instead of Uint8Array
       const buffer = new ArrayBuffer(1024)
@@ -2646,9 +2826,16 @@ describe('StorageService', () => {
     it.skip('should handle piece parking timeout', async () => {
       // Skip this test as it's timing-sensitive and causes issues in CI
       const mockWarmStorageService = {} as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       const testData = new Uint8Array(127).fill(42) // 127 bytes to meet minimum
       const testPieceCID = 'bafkzcibeqcad6efnpwn62p5vvs5x3nh3j7xkzfgb3xtitcdm2hulmty3xx4tl3wace'
@@ -2691,9 +2878,16 @@ describe('StorageService', () => {
       const mockWarmStorageService = {
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
       const testData = new Uint8Array(127).fill(42) // 127 bytes to meet minimum
 
       // Mock uploadPiece to fail
@@ -2719,9 +2913,16 @@ describe('StorageService', () => {
         }),
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
       const testData = new Uint8Array(127).fill(42) // 127 bytes to meet minimum
       const testPieceCID = 'bafkzcibeqcad6efnpwn62p5vvs5x3nh3j7xkzfgb3xtitcdm2hulmty3xx4tl3wace'
 
@@ -2760,9 +2961,16 @@ describe('StorageService', () => {
         },
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
       const testData = new Uint8Array(127).fill(42) // 127 bytes to meet minimum
       const testPieceCID = 'bafkzcibeqcad6efnpwn62p5vvs5x3nh3j7xkzfgb3xtitcdm2hulmty3xx4tl3wace'
 
@@ -2826,7 +3034,7 @@ describe('StorageService', () => {
         }
 
         try {
-          const result = await (StorageService as any).selectRandomProvider(testProviders)
+          const result = await (StorageContext as any).selectRandomProvider(testProviders)
 
           // Should have selected the second provider (first one failed ping)
           assert.equal(result.serviceProvider, testProviders[1].serviceProvider)
@@ -2861,7 +3069,7 @@ describe('StorageService', () => {
         }
 
         try {
-          await (StorageService as any).selectRandomProvider(testProviders)
+          await (StorageContext as any).selectRandomProvider(testProviders)
           assert.fail('Should have thrown error')
         } catch (error: any) {
           assert.include(error.message, 'StorageContext selectProviderWithPing failed')
@@ -2899,7 +3107,7 @@ describe('StorageService', () => {
             isManaged: true,
             withCDN: false,
             commissionBps: 0,
-            metadata: '',
+            metadata: {},
             pieceMetadata: [],
             clientDataSetId: 1,
           },
@@ -2935,7 +3143,7 @@ describe('StorageService', () => {
         }
 
         try {
-          await (StorageService as any).smartSelectProvider(
+          await (StorageContext as any).smartSelectProvider(
             '0x1234567890123456789012345678901234567890',
             false,
             mockWarmStorageService
@@ -2996,7 +3204,7 @@ describe('StorageService', () => {
             getAddress: async () => '0x1234567890123456789012345678901234567890',
           } as any
 
-          const result = await (StorageService as any).smartSelectProvider(
+          const result = await (StorageContext as any).smartSelectProvider(
             '0x1234567890123456789012345678901234567890',
             false,
             mockWarmStorageService,
@@ -3034,7 +3242,7 @@ describe('StorageService', () => {
             isManaged: true,
             withCDN: false,
             commissionBps: 0,
-            metadata: '',
+            metadata: {},
             pieceMetadata: [],
             clientDataSetId: 1,
           },
@@ -3065,7 +3273,7 @@ describe('StorageService', () => {
             getAddress: async () => '0x1234567890123456789012345678901234567890',
           } as any
 
-          const result = await (StorageService as any).smartSelectProvider(
+          const result = await (StorageContext as any).smartSelectProvider(
             '0x1234567890123456789012345678901234567890',
             false,
             mockWarmStorageService,
@@ -3105,7 +3313,7 @@ describe('StorageService', () => {
             isManaged: true,
             withCDN: false,
             commissionBps: 0,
-            metadata: '',
+            metadata: {},
             pieceMetadata: [],
             clientDataSetId: 1,
           },
@@ -3120,7 +3328,7 @@ describe('StorageService', () => {
             isManaged: true,
             withCDN: false,
             commissionBps: 0,
-            metadata: '',
+            metadata: {},
             pieceMetadata: [],
             clientDataSetId: 2,
           },
@@ -3135,7 +3343,7 @@ describe('StorageService', () => {
             isManaged: true,
             withCDN: false,
             commissionBps: 0,
-            metadata: '',
+            metadata: {},
             pieceMetadata: [],
             clientDataSetId: 3,
           },
@@ -3168,7 +3376,7 @@ describe('StorageService', () => {
         }
 
         try {
-          await (StorageService as any).smartSelectProvider(
+          await (StorageContext as any).smartSelectProvider(
             '0x1234567890123456789012345678901234567890',
             false,
             mockWarmStorageService
@@ -3201,9 +3409,16 @@ describe('StorageService', () => {
         },
       } as any
       const mockWarmStorageService = {} as any
-      const service = new StorageService(mockSynapseWithProvider, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapseWithProvider,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       const providerInfo = await service.getProviderInfo()
       assert.deepEqual(providerInfo, expectedProviderInfo)
@@ -3218,9 +3433,16 @@ describe('StorageService', () => {
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
       const mockWarmStorageService = {} as any
-      const service = new StorageService(mockSynapseWithError, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapseWithError,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       try {
         await service.getProviderInfo()
@@ -3236,9 +3458,16 @@ describe('StorageService', () => {
       const mockWarmStorageService = {
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       const mockDataSetData = {
         id: 292,
@@ -3278,9 +3507,16 @@ describe('StorageService', () => {
       const mockWarmStorageService = {
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       const mockDataSetData = {
         id: 292,
@@ -3304,9 +3540,16 @@ describe('StorageService', () => {
       const mockWarmStorageService = {
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       const mockDataSetData = {
         id: 292,
@@ -3337,9 +3580,16 @@ describe('StorageService', () => {
       const mockWarmStorageService = {
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       // Mock the PDP server getDataSet method to throw error
       const serviceAny = service as any
@@ -3366,9 +3616,16 @@ describe('StorageService', () => {
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
 
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       // Mock PDP server methods
       const serviceAny = service as any
@@ -3405,9 +3662,16 @@ describe('StorageService', () => {
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
 
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       // Mock PDP server methods
       const serviceAny = service as any
@@ -3450,9 +3714,16 @@ describe('StorageService', () => {
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
 
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       // Mock PDP server methods
       const serviceAny = service as any
@@ -3496,9 +3767,16 @@ describe('StorageService', () => {
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
 
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       // Mock PDP server methods
       const serviceAny = service as any
@@ -3539,9 +3817,16 @@ describe('StorageService', () => {
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
 
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       // Mock PDP server methods
       const serviceAny = service as any
@@ -3586,9 +3871,16 @@ describe('StorageService', () => {
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
 
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProviderWithSlash, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProviderWithSlash,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       // Mock PDP server methods
       const serviceAny = service as any
@@ -3623,9 +3915,16 @@ describe('StorageService', () => {
 
     it('should handle invalid PieceCID', async () => {
       const mockWarmStorageService = {} as any
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       try {
         await service.pieceStatus('invalid-pieceCid')
@@ -3646,9 +3945,16 @@ describe('StorageService', () => {
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
 
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       // Mock PDP server methods
       const serviceAny = service as any
@@ -3689,9 +3995,16 @@ describe('StorageService', () => {
         getServiceProviderRegistryAddress: () => '0x0000000000000000000000000000000000000001',
       } as any
 
-      const service = new StorageService(mockSynapse, mockWarmStorageService, mockProvider, 123, {
-        withCDN: false,
-      })
+      const service = new StorageContext(
+        mockSynapse,
+        mockWarmStorageService,
+        mockProvider,
+        123,
+        {
+          withCDN: false,
+        },
+        {}
+      )
 
       // Mock PDP server methods
       const serviceAny = service as any

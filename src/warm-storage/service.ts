@@ -378,13 +378,15 @@ export class WarmStorageService {
                 isLive: false,
                 isManaged: false,
                 withCDN: dataSet.cdnRailId > 0, // CDN is enabled if cdnRailId is non-zero (should be more reliable than metadata)
+                metadata: Object.create(null) as Record<string, string>,
               }
         }
 
         // Parallelize independent calls
-        const [isLive, listenerResult] = await Promise.all([
+        const [isLive, listenerResult, metadata] = await Promise.all([
           pdpVerifier.dataSetLive(pdpVerifierDataSetId),
           pdpVerifier.getDataSetListener(pdpVerifierDataSetId).catch(() => null),
+          this.getDataSetMetadata(pdpVerifierDataSetId).catch(() => Object.create(null) as Record<string, string>),
         ])
 
         // Check if this data set is managed by our Warm Storage contract
@@ -407,6 +409,7 @@ export class WarmStorageService {
           isLive,
           isManaged,
           withCDN: dataSet.cdnRailId > 0, // CDN is enabled if cdnRailId is non-zero
+          metadata,
         }
       } catch (error) {
         // Re-throw the error to let the caller handle it
@@ -699,6 +702,68 @@ export class WarmStorageService {
     throw new Error(`Data set creation timed out after ${maxWaitTime / 1000} seconds`)
   }
 
+  // ========== Metadata Operations ==========
+
+  /**
+   * Get all metadata for a data set
+   * @param dataSetId - The data set ID
+   * @returns Object with metadata key-value pairs
+   */
+  async getDataSetMetadata(dataSetId: number): Promise<Record<string, string>> {
+    const viewContract = this._getWarmStorageViewContract()
+    const [keys, values] = await viewContract.getAllDataSetMetadata(dataSetId)
+
+    // Create a prototype-safe object to avoid pollution risks from arbitrary keys
+    const metadata: Record<string, string> = Object.create(null)
+    for (let i = 0; i < keys.length; i++) {
+      metadata[keys[i]] = values[i]
+    }
+    return metadata
+  }
+
+  /**
+   * Get specific metadata key for a data set
+   * @param dataSetId - The data set ID
+   * @param key - The metadata key to retrieve
+   * @returns The metadata value if it exists, null otherwise
+   */
+  async getDataSetMetadataByKey(dataSetId: number, key: string): Promise<string | null> {
+    const viewContract = this._getWarmStorageViewContract()
+    const [exists, value] = await viewContract.getDataSetMetadata(dataSetId, key)
+    return exists ? value : null
+  }
+
+  /**
+   * Get all metadata for a piece in a data set
+   * @param dataSetId - The data set ID
+   * @param pieceId - The piece ID
+   * @returns Object with metadata key-value pairs
+   */
+  async getPieceMetadata(dataSetId: number, pieceId: number): Promise<Record<string, string>> {
+    const viewContract = this._getWarmStorageViewContract()
+    const [keys, values] = await viewContract.getAllPieceMetadata(dataSetId, pieceId)
+
+    // Create a prototype-safe object to avoid pollution risks from arbitrary keys
+    const metadata: Record<string, string> = Object.create(null)
+    for (let i = 0; i < keys.length; i++) {
+      metadata[keys[i]] = values[i]
+    }
+    return metadata
+  }
+
+  /**
+   * Get specific metadata key for a piece in a data set
+   * @param dataSetId - The data set ID
+   * @param pieceId - The piece ID
+   * @param key - The metadata key to retrieve
+   * @returns The metadata value if it exists, null otherwise
+   */
+  async getPieceMetadataByKey(dataSetId: number, pieceId: number, key: string): Promise<string | null> {
+    const viewContract = this._getWarmStorageViewContract()
+    const [exists, value] = await viewContract.getPieceMetadata(dataSetId, pieceId, key)
+    return exists ? value : null
+  }
+
   // ========== Storage Cost Operations ==========
 
   /**
@@ -858,7 +923,7 @@ export class WarmStorageService {
    * @example
    * ```typescript
    * const prep = await warmStorageService.prepareStorageUpload(
-   *   { dataSize: 1024 * 1024 * 1024, withCDN: true },
+   *   { dataSize: Number(SIZE_CONSTANTS.GiB), withCDN: true },
    *   paymentsService
    * )
    *
@@ -930,7 +995,7 @@ export class WarmStorageService {
             this._warmStorageAddress,
             allowanceCheck.rateAllowanceNeeded,
             allowanceCheck.lockupAllowanceNeeded,
-            86400n, // 30 days max lockup period
+            TIME_CONSTANTS.EPOCHS_PER_MONTH, // 30 days max lockup period
             TOKENS.USDFC
           ),
       })
@@ -950,6 +1015,20 @@ export class WarmStorageService {
       },
       actions,
     }
+  }
+
+  // ========== Data Set Operations ==========
+
+  /**
+   * Terminate a data set with given ID
+   * @param signer - Signer which created this dataset
+   * @param dataSetId  - ID of the data set to terminate
+   * @returns Transaction receipt
+   */
+  async terminateDataSet(signer: ethers.Signer, dataSetId: number): Promise<ethers.TransactionResponse> {
+    const contract = this._getWarmStorageContract()
+    const contractWithSigner = contract.connect(signer) as ethers.Contract
+    return await contractWithSigner.terminateService(dataSetId)
   }
 
   // ========== Service Provider Approval Operations ==========

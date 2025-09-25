@@ -238,10 +238,11 @@ interface SynapseOptions {
   authorization?: string          // Authorization header (e.g., 'Bearer TOKEN')
 
   // Advanced Configuration
-  withCDN?: boolean               // Enable CDN for retrievals (set a default for all new storage operations)
-  pieceRetriever?: PieceRetriever // Optional override for a custom retrieval stack
-  disableNonceManager?: boolean   // Disable automatic nonce management
-  warmStorageAddress?: string     // Override Warm Storage service contract address (all other addresses are discovered from this contract)
+  withCDN?: boolean                 // Enable CDN for retrievals (set a default for all new storage operations)
+  metadata?: Record<string, string> // Optional metadata for data sets (key-value pairs)
+  pieceRetriever?: PieceRetriever   // Optional override for a custom retrieval stack
+  disableNonceManager?: boolean     // Disable automatic nonce management
+  warmStorageAddress?: string       // Override Warm Storage service contract address (all other addresses are discovered from this contract)
 
   // Subgraph Integration (optional, provide only one of these options)
   subgraphService?: SubgraphRetrievalService // Custom implementation for provider discovery
@@ -361,7 +362,7 @@ The SDK automatically handles all the complexity of storage setup for you - sele
 2. **Explicit mode**: Create a context with `synapse.storage.createContext()` for more control. Contexts can be used directly or passed in the options to `synapse.storage.upload()` and `synapse.storage.download()`.
 
 Behind the scenes, the process may be:
-- **Fast (<1 second)**: When reusing existing infrastructure (i.e. an existing data set previously created)
+- **Fast (<1 second)**: When reusing existing data sets that match your requirements (including all metadata)
 - **Slower (2-5 minutes)**: When setting up new blockchain infrastructure (i.e. creating a brand new data set)
 
 #### Basic Usage
@@ -373,6 +374,16 @@ await synapse.storage.upload(data)  // Context created/reused automatically
 // Option 2: Explicit context creation
 const context = await synapse.storage.createContext()
 await context.upload(data)  // Upload to this specific context
+
+// Option 3: Context with metadata requirements
+const context = await synapse.storage.createContext({
+  metadata: {
+    withIPFSIndexing: '',
+    category: 'videos'
+  }
+})
+// This will reuse any existing data set that has both of these metadata entries,
+// or create a new one if none match
 ```
 
 #### Advanced Usage with Callbacks
@@ -423,15 +434,88 @@ interface StorageServiceOptions {
   providerId?: number                      // Specific provider ID to use
   providerAddress?: string                 // Specific provider address to use
   dataSetId?: number                       // Specific data set ID to use
-  withCDN?: boolean                        // Enable CDN services
+  withCDN?: boolean                        // Enable CDN services (alias for metadata: { withCDN: '' })
+  metadata?: Record<string, string>        // Metadata requirements for data set selection/creation
   callbacks?: StorageCreationCallbacks     // Progress callbacks
   uploadBatchSize?: number                 // Max uploads per batch (default: 32, min: 1)
 }
+```
 
-// Note: The withCDN option follows an inheritance pattern:
-// 1. Synapse instance default (set during creation)
-// 2. StorageService override (set during createStorage)
-// 3. Per-method override (set during download)
+#### Data Set Selection and Matching
+
+The SDK intelligently manages data sets to minimize on-chain transactions. The selection behavior depends on the parameters you provide:
+
+**Selection Scenarios**:
+1. **Explicit data set ID**: If you specify `dataSetId`, that exact data set is used (must exist and be accessible)
+2. **Specific provider**: If you specify `providerId` or `providerAddress`, the SDK searches for matching data sets only within that provider's existing data sets
+3. **Automatic selection**: Without specific parameters, the SDK searches across all your data sets with any approved provider
+
+**Exact Metadata Matching**: In scenarios 2 and 3, the SDK will reuse an existing data set only if it has **exactly** the same metadata keys and values as requested. This ensures data sets remain organized according to your specific requirements.
+
+**Selection Priority**: When multiple data sets match your criteria:
+- Data sets with existing pieces are preferred over empty ones
+- Within each group (with pieces vs. empty), the oldest data set (lowest ID) is selected
+
+**Provider Selection** (when no matching data sets exist):
+- If you specify a provider (via `providerId` or `providerAddress`), that provider is used
+- Otherwise, the SDK currently uses random selection from all approved providers
+- Before finalizing selection, the SDK verifies the provider is reachable via a ping test
+- If a provider fails the ping test, the SDK tries the next candidate
+
+```javascript
+// Scenario 1: Explicit data set (no matching required)
+const context1 = await synapse.storage.createContext({
+  dataSetId: 42  // Uses data set 42 directly
+})
+
+// Scenario 2: Provider-specific search
+const context2 = await synapse.storage.createContext({
+  providerId: 3,
+  metadata: { app: 'myapp', env: 'prod' }
+})
+// Searches ONLY within provider 3's data sets for exact metadata match
+
+// Scenario 3: Automatic selection across all providers
+const context3 = await synapse.storage.createContext({
+  metadata: { app: 'myapp', env: 'prod' }
+})
+// Searches ALL your data sets across any approved provider
+
+// Metadata matching examples (exact match required):
+// These will use the SAME data set (if it exists)
+const contextA = await synapse.storage.createContext({
+  metadata: { app: 'myapp', env: 'prod' }
+})
+const contextB = await synapse.storage.createContext({
+  metadata: { env: 'prod', app: 'myapp' }  // Order doesn't matter
+})
+
+// These will use DIFFERENT data sets
+const contextC = await synapse.storage.createContext({
+  metadata: { app: 'myapp' }  // Missing 'env' key
+})
+const contextD = await synapse.storage.createContext({
+  metadata: { app: 'myapp', env: 'prod', extra: 'data' }  // Has extra key
+})
+
+// Provider selection when no data sets match:
+const newContext = await synapse.storage.createContext({
+  metadata: { app: 'newapp', version: 'v1' }
+})
+// If no existing data sets have this exact metadata:
+// 1. SDK randomly selects from approved providers
+// 2. Pings the selected provider to verify availability
+// 3. Creates a new data set with that provider
+```
+
+**The `withCDN` Option**: This is a convenience alias for adding `{ withCDN: '' }` to metadata:
+
+```javascript
+// These are equivalent:
+const context1 = await synapse.storage.createContext({ withCDN: true })
+const context2 = await synapse.storage.createContext({
+  metadata: { withCDN: '' }
+})
 ```
 
 #### Storage Context Properties
@@ -524,6 +608,10 @@ for (const data of dataArray) {
 
 The SDK batches up to 32 uploads by default (configurable via `uploadBatchSize`). If you have more than 32 files, they'll be processed in multiple batches automatically.
 
+##### Removing Data Sets
+
+To terminate an entire data set and halt associated payments, call `context.terminate()` or `synapse.storage.terminateDataSet(dataSetId: number)`. This action is irreversible and cannot be canceled once initiated. Following a defined termination period, payments will cease, and the service provider will be able to delete the data set.
+
 ### Storage Information
 
 Get comprehensive information about the storage service:
@@ -575,22 +663,24 @@ const contextWithCDN = await synapse.storage.createContext({ withCDN: true })
 const dataWithCDN = await contextWithCDN.download(pieceCid) // Uses CDN if available
 ```
 
-#### CDN Inheritance Pattern
+#### CDN Option Inheritance
 
-The `withCDN` option follows a clear inheritance hierarchy:
+The `withCDN` option (which is an alias for `metadata: { withCDN: '' }`) follows a clear inheritance hierarchy:
 
 1. **Synapse level**: Default setting for all operations
-2. **StorageService level**: Can override Synapse's default
+2. **StorageContext level**: Can override Synapse's default
 3. **Method level**: Can override instance settings
 
 ```javascript
 // Example of inheritance
-const synapse = await Synapse.create({ withCDN: true })              // Global default: CDN enabled
-const context = await synapse.storage.createContext({ withCDN: false }) // Context override: CDN disabled
-await synapse.storage.download(pieceCid)                                // Uses Synapse's withCDN: true
-await context.download(pieceCid)                                        // Uses context's withCDN: false
-await synapse.storage.download(pieceCid, { withCDN: false })            // Method override: CDN disabled
+const synapse = await Synapse.create({ withCDN: true })                  // Global default: CDN enabled
+const context = await synapse.storage.createContext({ withCDN: false })  // Context override: CDN disabled
+await synapse.storage.download(pieceCid)                                 // Uses Synapse's withCDN: true
+await context.download(pieceCid)                                         // Uses context's withCDN: false
+await synapse.storage.download(pieceCid, { withCDN: false })             // Method override: CDN disabled
 ```
+
+Note: When `withCDN: true` is set, it adds `{ withCDN: '' }` to the data set's metadata, ensuring CDN-enabled and non-CDN data sets remain separate.
 
 ---
 
@@ -952,7 +1042,7 @@ const pdpServer = new PDPServer(authHelper, 'https://pdp.provider.com', 'https:/
 const { txHash, statusUrl } = await pdpServer.createDataSet(
   clientDataSetId,     // number
   payee,               // string (service provider address)
-  withCDN,             // boolean
+  metadata,            // MetadataEntry[] (optional metadata, use [] for none)
   recordKeeper         // string (Warm Storage contract address)
 )
 
@@ -1004,13 +1094,14 @@ const authHelper = new PDPAuthHelper(warmStorageAddress, signer, chainId)
 const createDataSetSig = await authHelper.signCreateDataSet(
   clientDataSetId,    // number
   payeeAddress,       // string
-  withCDN             // boolean
+  metadata            // MetadataEntry[] (optional metadata)
 )
 
 const addPiecesSig = await authHelper.signAddPieces(
   clientDataSetId,    // number
   firstPieceId,       // number
-  pieceDataArray      // Array of { cid: string | PieceCID, rawSize: number }
+  pieceDataArray,     // Array of { cid: string | PieceCID, rawSize: number }
+  metadata            // MetadataEntry[][] (optional per-piece metadata)
 )
 
 // All signatures return { signature, v, r, s, signedData }
@@ -1147,7 +1238,7 @@ Contributions are welcome! If using an AI tool, you are welcome to load AGENTS.m
 
 ### Commit Message Guidelines
 
-This repository uses **auto-publishing** with semantic versioning based on commit messages. All commits must follow the [Conventional Commits](https://www.conventionalcommits.org/) specification.
+This repository uses **release-please** for automated releases with semantic versioning based on commit messages. All commits must follow the [Conventional Commits](https://www.conventionalcommits.org/) specification.
 
 #### Commit Message Format
 
@@ -1187,11 +1278,21 @@ git commit -m "fix: update API signature
 BREAKING CHANGE: The createStorage method now requires explicit provider selection"
 ```
 
+#### Release Process
+
+1. **Commit**: Make commits following the conventional format
+2. **Push**: Push to main branch or merge PR
+3. **CI**: Release Please analyzes commits and creates/updates a release PR
+4. **Review**: Review the release PR with proposed version bump and changelog
+5. **Merge**: Merge the release PR to trigger the actual release
+6. **Publish**: GitHub Actions automatically publishes to npm and creates a GitHub release
+
 #### Important Notes
 
 - **Stay in 0.x.x range**: Avoid breaking changes (`!` or `BREAKING CHANGE`) until M1 milestone
-- **Auto-publishing**: Every merge to main triggers automatic npm publishing based on commit messages
-- **Changelog generation**: Commit messages are used to generate release notes
+- **Release PR**: Release Please creates a PR titled "chore(main): release X.Y.Z" with changelog updates
+- **Auto-publishing**: Merging the release PR triggers npm publishing
+- **Changelog generation**: Commit messages are automatically formatted into release notes
 - **Standard JS**: We follow [Standard JS](https://standardjs.com/) code style
 
 ### Git hooks
@@ -1298,8 +1399,8 @@ pdpServer.createProofSet(serviceProvider, clientDataSetId)
 pdpServer.addRoots(proofSetId, clientDataSetId, nextRootId, rootData)
 
 // After (v0.24.0+)
-pdpServer.createDataSet(serviceProvider, clientDataSetId)
-pdpServer.addPieces(dataSetId, clientDataSetId, nextPieceId, pieceData)
+pdpServer.createDataSet(clientDataSetId, serviceProvider, metadata, recordKeeper)
+pdpServer.addPieces(dataSetId, clientDataSetId, nextPieceId, pieceData, metadata)
 ```
 
 #### Service Provider Registry

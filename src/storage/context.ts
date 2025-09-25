@@ -32,6 +32,7 @@ import type { Synapse } from '../synapse.ts'
 import type {
   DownloadOptions,
   EnhancedDataSetInfo,
+  MetadataEntry,
   PieceCID,
   PieceStatus,
   PreflightInfo,
@@ -39,6 +40,7 @@ import type {
   StorageCreationCallbacks,
   StorageServiceOptions,
   UploadCallbacks,
+  UploadOptions,
   UploadResult,
 } from '../types.ts'
 import {
@@ -46,10 +48,12 @@ import {
   createError,
   epochToDate,
   getCurrentEpoch,
+  METADATA_KEYS,
   SIZE_CONSTANTS,
   TIMING_CONSTANTS,
   timeUntilEpoch,
 } from '../utils/index.ts'
+import { combineMetadata, metadataMatches, objectToEntries, validatePieceMetadata } from '../utils/metadata.ts'
 import { ProviderResolver } from '../utils/provider-resolver.ts'
 import type { WarmStorageService } from '../warm-storage/index.ts'
 
@@ -63,6 +67,7 @@ export class StorageContext {
   private readonly _dataSetId: number
   private readonly _signer: ethers.Signer
   private readonly _uploadBatchSize: number
+  private readonly _dataSetMetadata: Record<string, string>
 
   // AddPieces batching state
   private _pendingPieces: Array<{
@@ -70,6 +75,7 @@ export class StorageContext {
     resolve: (pieceId: number) => void
     reject: (error: Error) => void
     callbacks?: UploadCallbacks
+    metadata?: MetadataEntry[]
   }> = []
 
   private _isProcessing: boolean = false
@@ -86,6 +92,11 @@ export class StorageContext {
   // Getter for provider info
   get provider(): ProviderInfo {
     return this._provider
+  }
+
+  // Getter for data set metadata
+  get dataSetMetadata(): Record<string, string> {
+    return this._dataSetMetadata
   }
 
   /**
@@ -125,7 +136,8 @@ export class StorageContext {
     warmStorageService: WarmStorageService,
     provider: ProviderInfo,
     dataSetId: number,
-    options: StorageServiceOptions
+    options: StorageServiceOptions,
+    dataSetMetadata: Record<string, string>
   ) {
     this._synapse = synapse
     this._provider = provider
@@ -134,6 +146,7 @@ export class StorageContext {
     this._signer = synapse.getSigner()
     this._warmStorageService = warmStorageService
     this._uploadBatchSize = Math.max(1, options.uploadBatchSize ?? SIZE_CONSTANTS.DEFAULT_UPLOAD_BATCH_SIZE)
+    this._dataSetMetadata = dataSetMetadata
 
     // Set public properties
     this.dataSetId = dataSetId
@@ -191,7 +204,8 @@ export class StorageContext {
         warmStorageService,
         resolution.provider,
         options.withCDN ?? false,
-        options.callbacks
+        options.callbacks,
+        options.metadata
       )
     } else {
       // Use existing data set
@@ -209,7 +223,14 @@ export class StorageContext {
       }
     }
 
-    return new StorageContext(synapse, warmStorageService, resolution.provider, finalDataSetId, options)
+    return new StorageContext(
+      synapse,
+      warmStorageService,
+      resolution.provider,
+      finalDataSetId,
+      options,
+      resolution.dataSetMetadata
+    )
   }
 
   /**
@@ -220,7 +241,8 @@ export class StorageContext {
     warmStorageService: WarmStorageService,
     provider: ProviderInfo,
     withCDN: boolean,
-    callbacks?: StorageCreationCallbacks
+    callbacks?: StorageCreationCallbacks,
+    metadata?: Record<string, string>
   ): Promise<number> {
     performance.mark('synapse:createDataSet-start')
 
@@ -242,9 +264,19 @@ export class StorageContext {
     }
     const pdpServer = new PDPServer(authHelper, provider.products.PDP.data.serviceURL)
 
+    // Prepare metadata - merge withCDN flag into metadata if needed
+    const baseMetadataObj = metadata ?? {}
+    const metadataObj =
+      withCDN && !(METADATA_KEYS.WITH_CDN in baseMetadataObj)
+        ? { ...baseMetadataObj, [METADATA_KEYS.WITH_CDN]: '' }
+        : baseMetadataObj
+
+    // Convert to MetadataEntry[] for PDP operations (requires ordered array)
+    const finalMetadata = objectToEntries(metadataObj)
+
     // Create the data set through the provider
     performance.mark('synapse:pdpServer.createDataSet-start')
-    const createResult = await pdpServer.createDataSet(nextDatasetId, provider.payee, withCDN, warmStorageAddress)
+    const createResult = await pdpServer.createDataSet(nextDatasetId, provider.payee, finalMetadata, warmStorageAddress)
     performance.mark('synapse:pdpServer.createDataSet-end')
     performance.measure(
       'synapse:pdpServer.createDataSet',
@@ -411,12 +443,15 @@ export class StorageContext {
       )
     }
 
+    // Convert options to metadata format - merge withCDN flag into metadata if needed
+    const requestedMetadata = combineMetadata(options.metadata, options.withCDN)
+
     // Handle explicit provider ID selection
     if (options.providerId != null) {
       return await StorageContext.resolveByProviderId(
         clientAddress,
         options.providerId,
-        options.withCDN ?? false,
+        requestedMetadata,
         warmStorageService,
         providerResolver
       )
@@ -429,14 +464,14 @@ export class StorageContext {
         warmStorageService,
         providerResolver,
         clientAddress,
-        options.withCDN ?? false
+        requestedMetadata
       )
     }
 
     // Smart selection when no specific parameters provided
     return await StorageContext.smartSelectProvider(
       clientAddress,
-      options.withCDN ?? false,
+      requestedMetadata,
       warmStorageService,
       providerResolver,
       client
@@ -491,10 +526,14 @@ export class StorageContext {
       )
     }
 
+    // Backfill data set metadata from chain
+    const dataSetMetadata = await warmStorageService.getDataSetMetadata(dataSetId)
+
     return {
       provider,
       dataSetId,
       isExisting: true,
+      dataSetMetadata,
     }
   }
 
@@ -542,14 +581,10 @@ export class StorageContext {
   private static async resolveByProviderId(
     signerAddress: string,
     providerId: number,
-    withCDN: boolean,
+    requestedMetadata: Record<string, string>,
     warmStorageService: WarmStorageService,
     providerResolver: ProviderResolver
-  ): Promise<{
-    provider: ProviderInfo
-    dataSetId: number
-    isExisting: boolean
-  }> {
+  ): Promise<ProviderSelectionResult> {
     // Fetch provider info and data sets in parallel
     const [provider, dataSets] = await Promise.all([
       providerResolver.getApprovedProvider(providerId),
@@ -560,10 +595,14 @@ export class StorageContext {
       throw createError('StorageContext', 'resolveByProviderId', `Provider ID ${providerId} is not currently approved`)
     }
 
-    // Filter for this provider's data sets
-    const providerDataSets = dataSets.filter(
-      (ps) => ps.providerId === provider.id && ps.isLive && ps.isManaged && ps.withCDN === withCDN
-    )
+    // Filter for this provider's data sets with matching metadata
+    const providerDataSets = dataSets.filter((ps) => {
+      if (ps.providerId !== provider.id || !ps.isLive || !ps.isManaged) {
+        return false
+      }
+      // Check if metadata matches
+      return metadataMatches(ps.metadata, requestedMetadata)
+    })
 
     if (providerDataSets.length > 0) {
       // Sort by preference: data sets with pieces first, then by ID
@@ -573,10 +612,14 @@ export class StorageContext {
         return a.pdpVerifierDataSetId - b.pdpVerifierDataSetId
       })
 
+      // Fetch metadata for existing data set
+      const dataSetMetadata = await warmStorageService.getDataSetMetadata(sorted[0].pdpVerifierDataSetId)
+
       return {
         provider,
         dataSetId: sorted[0].pdpVerifierDataSetId,
         isExisting: true,
+        dataSetMetadata,
       }
     }
 
@@ -585,6 +628,7 @@ export class StorageContext {
       provider,
       dataSetId: -1, // Marker for new data set
       isExisting: false,
+      dataSetMetadata: requestedMetadata,
     }
   }
 
@@ -596,12 +640,8 @@ export class StorageContext {
     warmStorageService: WarmStorageService,
     providerResolver: ProviderResolver,
     signerAddress: string,
-    withCDN: boolean
-  ): Promise<{
-    provider: ProviderInfo
-    dataSetId: number
-    isExisting: boolean
-  }> {
+    requestedMetadata: Record<string, string>
+  ): Promise<ProviderSelectionResult> {
     // Get provider by address
     const provider = await providerResolver.getApprovedProviderByAddress(providerAddress)
     if (provider == null) {
@@ -616,7 +656,7 @@ export class StorageContext {
     return await StorageContext.resolveByProviderId(
       signerAddress,
       provider.id,
-      withCDN,
+      requestedMetadata,
       warmStorageService,
       providerResolver
     )
@@ -628,15 +668,11 @@ export class StorageContext {
    */
   private static async smartSelectProvider(
     signerAddress: string,
-    withCDN: boolean,
+    requestedMetadata: Record<string, string>,
     warmStorageService: WarmStorageService,
     providerResolver: ProviderResolver,
     signer: ethers.Signer
-  ): Promise<{
-    provider: ProviderInfo
-    dataSetId: number
-    isExisting: boolean
-  }> {
+  ): Promise<ProviderSelectionResult> {
     // Strategy:
     // 1. Try to find existing data sets first
     // 2. If no existing data sets, find a healthy provider
@@ -644,8 +680,10 @@ export class StorageContext {
     // Get client's data sets
     const dataSets = await warmStorageService.getClientDataSetsWithDetails(signerAddress)
 
-    // Filter for managed data sets with matching CDN setting
-    const managedDataSets = dataSets.filter((ps) => ps.isLive && ps.isManaged && ps.withCDN === withCDN)
+    // Filter for managed data sets with matching metadata
+    const managedDataSets = dataSets.filter(
+      (ps) => ps.isLive && ps.isManaged && metadataMatches(ps.metadata, requestedMetadata)
+    )
 
     if (managedDataSets.length > 0) {
       // Prefer data sets with pieces, sort by ID (older first)
@@ -689,10 +727,14 @@ export class StorageContext {
           )
           // Fall through to select from all approved providers below
         } else {
+          // Fetch metadata for existing data set
+          const dataSetMetadata = await warmStorageService.getDataSetMetadata(matchingDataSet.pdpVerifierDataSetId)
+
           return {
             provider: selectedProvider,
             dataSetId: matchingDataSet.pdpVerifierDataSetId,
             isExisting: true,
+            dataSetMetadata,
           }
         }
       } catch (_error) {
@@ -714,6 +756,7 @@ export class StorageContext {
       provider,
       dataSetId: -1, // Marker for new data set
       isExisting: false,
+      dataSetMetadata: requestedMetadata,
     }
   }
 
@@ -820,10 +863,10 @@ export class StorageContext {
    * @returns Preflight check results without provider/dataSet specifics
    */
   static async performPreflightCheck(
-    size: number,
-    withCDN: boolean,
     warmStorageService: WarmStorageService,
-    paymentsService: PaymentsService
+    paymentsService: PaymentsService,
+    size: number,
+    withCDN: boolean
   ): Promise<PreflightInfo> {
     // Validate size before proceeding
     StorageContext.validateRawSize(size, 'preflightUpload')
@@ -855,10 +898,10 @@ export class StorageContext {
   async preflightUpload(size: number): Promise<PreflightInfo> {
     // Use the static method for core logic
     const preflightResult = await StorageContext.performPreflightCheck(
-      size,
-      this._withCDN,
       this._warmStorageService,
-      this._synapse.payments
+      this._synapse.payments,
+      size,
+      this._withCDN
     )
 
     // Return preflight info with provider and dataSet specifics
@@ -872,7 +915,7 @@ export class StorageContext {
   /**
    * Upload data to the service provider
    */
-  async upload(data: Uint8Array | ArrayBuffer, callbacks?: UploadCallbacks): Promise<UploadResult> {
+  async upload(data: Uint8Array | ArrayBuffer, options?: UploadOptions): Promise<UploadResult> {
     performance.mark('synapse:upload-start')
 
     // Validation Phase: Check data size
@@ -930,12 +973,17 @@ export class StorageContext {
     }
 
     // Notify upload complete
-    if (callbacks?.onUploadComplete != null) {
-      callbacks.onUploadComplete(uploadResult.pieceCid)
+    if (options?.onUploadComplete != null) {
+      options.onUploadComplete(uploadResult.pieceCid)
     }
 
     // Add Piece Phase: Queue the AddPieces operation for sequential processing
     const pieceData = uploadResult.pieceCid
+
+    // Validate metadata early (before queueing) to fail fast
+    if (options?.metadata != null) {
+      validatePieceMetadata(options.metadata)
+    }
 
     const finalPieceId = await new Promise<number>((resolve, reject) => {
       // Add to pending batch
@@ -943,7 +991,8 @@ export class StorageContext {
         pieceData,
         resolve,
         reject,
-        callbacks,
+        callbacks: options,
+        metadata: options?.metadata ? objectToEntries(options.metadata) : undefined,
       })
 
       // Debounce: defer processing to next event loop tick
@@ -986,8 +1035,9 @@ export class StorageContext {
       performance.mark('synapse:getAddPiecesInfo-end')
       performance.measure('synapse:getAddPiecesInfo', 'synapse:getAddPiecesInfo-start', 'synapse:getAddPiecesInfo-end')
 
-      // Create piece data array from the batch
+      // Create piece data array and metadata from the batch
       const pieceDataArray: PieceCID[] = batch.map((item) => item.pieceData)
+      const metadataArray: MetadataEntry[][] = batch.map((item) => item.metadata ?? [])
 
       // Add pieces to the data set
       performance.mark('synapse:pdpServer.addPieces-start')
@@ -995,7 +1045,8 @@ export class StorageContext {
         this._dataSetId, // PDPVerifier data set ID
         addPiecesInfo.clientDataSetId, // Client's dataset ID
         addPiecesInfo.nextPieceId, // Must match chain state
-        pieceDataArray
+        pieceDataArray,
+        metadataArray
       )
       performance.mark('synapse:pdpServer.addPieces-end')
       performance.measure(
@@ -1360,5 +1411,14 @@ export class StorageContext {
       hoursUntilChallengeWindow,
       isProofOverdue,
     }
+  }
+
+  /**
+   * Terminates the data set by sending on-chain message.
+   * This will also result in the removal of all pieces in the data set.
+   * @returns Transaction response
+   */
+  async terminate(): Promise<ethers.TransactionResponse> {
+    return this._synapse.storage.terminateDataSet(this._dataSetId)
   }
 }

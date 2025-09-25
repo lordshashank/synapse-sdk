@@ -13,7 +13,7 @@ You have two options:
 2. **Explicit mode**: Create a context with `synapse.storage.createContext()` for more control. Contexts can be used directly or passed in the options to `synapse.storage.upload()` and `synapse.storage.download()`.
 
 Behind the scenes, the process may be:
-- **Fast (< 1 second)**: When reusing existing infrastructure (i.e. an existing data set previously created)
+- **Fast (< 1 second)**: When reusing existing data sets that match your requirements (including all metadata)
 - **Slower (2-5 minutes)**: When setting up new blockchain infrastructure (i.e. creating a brand new data set)
 
 #### Basic Usage
@@ -25,7 +25,33 @@ await synapse.storage.upload(data)  // Context created/reused automatically
 // Option 2: Explicit context creation
 const context = await synapse.storage.createContext()
 await context.upload(data)  // Upload to this specific context
+
+// Option 3: Context with metadata requirements
+const context = await synapse.storage.createContext({
+  metadata: {
+    withIPFSIndexing: '',
+    category: 'videos'
+  }
+})
+// This will reuse any existing data set that has both of these metadata entries,
+// or create a new one if none match
 ```
+
+#### Metadata Limits
+
+Metadata is subject to the following contract-enforced limits:
+
+**Data Set Metadata:**
+- Maximum of 10 key-value pairs per data set
+- Keys: Maximum 32 characters
+- Values: Maximum 128 characters
+
+**Piece Metadata:**
+- Maximum of 5 key-value pairs per piece
+- Keys: Maximum 32 characters
+- Values: Maximum 128 characters
+
+These limits are enforced by the blockchain contracts. The SDK will validate metadata before submission and throw descriptive errors if limits are exceeded.
 
 #### Advanced Usage with Callbacks
 
@@ -75,15 +101,88 @@ interface StorageServiceOptions {
   providerId?: number                      // Specific provider ID to use
   providerAddress?: string                 // Specific provider address to use
   dataSetId?: number                       // Specific data set ID to use
-  withCDN?: boolean                        // Enable CDN services
+  withCDN?: boolean                        // Enable CDN services (alias for metadata: { withCDN: '' })
+  metadata?: Record<string, string>        // Metadata requirements for data set selection/creation
   callbacks?: StorageCreationCallbacks     // Progress callbacks
   uploadBatchSize?: number                 // Max uploads per batch (default: 32, min: 1)
 }
+```
 
-// Note: The withCDN option follows an inheritance pattern:
-// 1. Synapse instance default (set during creation)
-// 2. StorageService override (set during createStorage)
-// 3. Per-method override (set during download)
+#### Data Set Selection and Matching
+
+The SDK intelligently manages data sets to minimize on-chain transactions. The selection behavior depends on the parameters you provide:
+
+**Selection Scenarios**:
+1. **Explicit data set ID**: If you specify `dataSetId`, that exact data set is used (must exist and be accessible)
+2. **Specific provider**: If you specify `providerId` or `providerAddress`, the SDK searches for matching data sets only within that provider's existing data sets
+3. **Automatic selection**: Without specific parameters, the SDK searches across all your data sets with any approved provider
+
+**Exact Metadata Matching**: In scenarios 2 and 3, the SDK will reuse an existing data set only if it has **exactly** the same metadata keys and values as requested. This ensures data sets remain organized according to your specific requirements.
+
+**Selection Priority**: When multiple data sets match your criteria:
+- Data sets with existing pieces are preferred over empty ones
+- Within each group (with pieces vs. empty), the oldest data set (lowest ID) is selected
+
+**Provider Selection** (when no matching data sets exist):
+- If you specify a provider (via `providerId` or `providerAddress`), that provider is used
+- Otherwise, the SDK currently uses random selection from all approved providers
+- Before finalizing selection, the SDK verifies the provider is reachable via a ping test
+- If a provider fails the ping test, the SDK tries the next candidate
+
+```typescript
+// Scenario 1: Explicit data set (no matching required)
+const context1 = await synapse.storage.createContext({
+  dataSetId: 42  // Uses data set 42 directly
+})
+
+// Scenario 2: Provider-specific search
+const context2 = await synapse.storage.createContext({
+  providerId: 3,
+  metadata: { app: 'myapp', env: 'prod' }
+})
+// Searches ONLY within provider 3's data sets for exact metadata match
+
+// Scenario 3: Automatic selection across all providers
+const context3 = await synapse.storage.createContext({
+  metadata: { app: 'myapp', env: 'prod' }
+})
+// Searches ALL your data sets across any approved provider
+
+// Metadata matching examples (exact match required):
+// These will use the SAME data set (if it exists)
+const contextA = await synapse.storage.createContext({
+  metadata: { app: 'myapp', env: 'prod' }
+})
+const contextB = await synapse.storage.createContext({
+  metadata: { env: 'prod', app: 'myapp' }  // Order doesn't matter
+})
+
+// These will use DIFFERENT data sets
+const contextC = await synapse.storage.createContext({
+  metadata: { app: 'myapp' }  // Missing 'env' key
+})
+const contextD = await synapse.storage.createContext({
+  metadata: { app: 'myapp', env: 'prod', extra: 'data' }  // Has extra key
+})
+
+// Provider selection when no data sets match:
+const newContext = await synapse.storage.createContext({
+  metadata: { app: 'newapp', version: 'v1' }
+})
+// If no existing data sets have this exact metadata:
+// 1. SDK randomly selects from approved providers
+// 2. Pings the selected provider to verify availability
+// 3. Creates a new data set with that provider
+```
+
+**The `withCDN` Option**: This is a convenience alias for adding `{ withCDN: '' }` to metadata:
+
+```typescript
+// These are equivalent:
+const context1 = await synapse.storage.createContext({ withCDN: true })
+const context2 = await synapse.storage.createContext({
+  metadata: { withCDN: '' }
+})
 ```
 
 #### Storage Context Properties
@@ -115,8 +214,13 @@ console.log('Allowance sufficient:', preflight.allowanceCheck.sufficient)
 Upload and download data with the storage context:
 
 ```typescript
-// Upload with optional progress callbacks
+// Upload with optional progress callbacks and piece-specific metadata
 const result = await context.upload(data, {
+  // Optional: Add metadata specific to this piece (key-value pairs)
+  metadata: {
+    snapshotVersion: 'v2.1.0',
+    generator: 'backup-system'
+  },
   onUploadComplete: (pieceCid) => {
     console.log(`Upload complete! PieceCID: ${pieceCid}`)
   },
@@ -179,6 +283,19 @@ for (const data of dataArray) {
 
 The SDK batches up to 32 uploads by default (configurable via `uploadBatchSize`). If you have more than 32 files, they'll be processed in multiple batches automatically.
 
+##### Removing Data
+
+To delete an entire data set and discontinue payments for the service, call `context.terminate()`.
+This method submits an on-chain transaction to initiate the termination process. Following a defined termination period, payments will cease, and the service provider will be able to delete the data set.
+
+You can also terminate a data set using `synapse.storage.terminateDataSet(dataSetId)`, in a case that creation of the context is not possible or `dataSetId` is known and creation of the context is not necessary.
+
+**Important:** Data set termination is irreversible and cannot be canceled once initiated.
+
+Deletion of individual pieces is not supported at this time but is on the roadmap.
+
+
+
 ### Storage Information
 
 Get comprehensive information about the storage service:
@@ -230,19 +347,21 @@ const contextWithCDN = await synapse.storage.createContext({ withCDN: true })
 const dataWithCDN = await contextWithCDN.download(pieceCid) // Uses CDN if available
 ```
 
-#### CDN Inheritance Pattern
+#### CDN Option Inheritance
 
-The `withCDN` option follows a clear inheritance hierarchy:
+The `withCDN` option (which is an alias for `metadata: { withCDN: '' }`) follows a clear inheritance hierarchy:
 
 1. **Synapse level**: Default setting for all operations
-2. **StorageService level**: Can override Synapse's default
+2. **StorageContext level**: Can override Synapse's default
 3. **Method level**: Can override instance settings
 
 ```typescript
 // Example of inheritance
-const synapse = await Synapse.create({ withCDN: true })              // Global default: CDN enabled
-const context = await synapse.storage.createContext({ withCDN: false }) // Context override: CDN disabled
-await synapse.storage.download(pieceCid)                                // Uses Synapse's withCDN: true
-await context.download(pieceCid)                                        // Uses context's withCDN: false
-await synapse.storage.download(pieceCid, { withCDN: false })            // Method override: CDN disabled
+const synapse = await Synapse.create({ withCDN: true })                  // Global default: CDN enabled
+const context = await synapse.storage.createContext({ withCDN: false })  // Context override: CDN disabled
+await synapse.storage.download(pieceCid)                                 // Uses Synapse's withCDN: true
+await context.download(pieceCid)                                         // Uses context's withCDN: false
+await synapse.storage.download(pieceCid, { withCDN: false })             // Method override: CDN disabled
 ```
+
+Note: When `withCDN: true` is set, it adds `{ withCDN: '' }` to the data set's metadata, ensuring CDN-enabled and non-CDN data sets remain separate.

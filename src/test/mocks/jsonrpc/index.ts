@@ -9,7 +9,7 @@ import {
   multicall3Abi,
   parseUnits,
 } from 'viem'
-import { CONTRACT_ADDRESSES } from '../../../utils/constants.ts'
+import { CONTRACT_ADDRESSES, TIME_CONSTANTS } from '../../../utils/constants.ts'
 import { paymentsCallHandler } from './payments.ts'
 import { pdpVerifierCallHandler } from './pdp.ts'
 import { serviceProviderRegistryCallHandler } from './service-registry.ts'
@@ -227,7 +227,7 @@ export const presets = {
           pricePerTiBPerMonthNoCDN: parseUnits('2', 18),
           pricePerTiBPerMonthWithCDN: parseUnits('3', 18),
           tokenAddress: ADDRESSES.calibration.usdfcToken,
-          epochsPerMonth: 86400n,
+          epochsPerMonth: TIME_CONSTANTS.EPOCHS_PER_MONTH,
         },
       ],
     },
@@ -252,6 +252,39 @@ export const presets = {
       ],
       railToDataSet: () => [1n],
       getApprovedProviders: () => [[1n, 2n]],
+      getAllDataSetMetadata: (args) => {
+        const [dataSetId] = args
+        if (dataSetId === 1n) {
+          return [
+            ['environment', 'withCDN'], // keys
+            ['test', ''], // values
+          ]
+        }
+        return [[], []] // empty metadata for other data sets
+      },
+      getDataSetMetadata: (args) => {
+        const [dataSetId, key] = args
+        if (dataSetId === 1n && key === 'withCDN') return [true, '']
+        if (dataSetId === 1n && key === 'environment') return [true, 'test']
+        return [false, ''] // key not found
+      },
+      getAllPieceMetadata: (args) => {
+        const [dataSetId, pieceId] = args
+        if (dataSetId === 1n && pieceId === 0n) {
+          return [
+            ['withIPFSIndexing', 'ipfsRootCID'], // keys
+            ['', 'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi'], // values
+          ]
+        }
+        return [[], []] // empty metadata for other pieces
+      },
+      getPieceMetadata: (args) => {
+        const [dataSetId, pieceId, key] = args
+        if (dataSetId === 1n && pieceId === 0n && key === 'withIPFSIndexing') return [true, '']
+        if (dataSetId === 1n && pieceId === 0n && key === 'ipfsRootCID')
+          return [true, 'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi']
+        return [false, ''] // key not found
+      },
     },
     pdpVerifier: {
       dataSetLive: () => [true],

@@ -5,6 +5,7 @@
 import { ethers } from 'ethers'
 import { asPieceCID, type PieceCID } from '../piece/index.ts'
 import type { AuthSignature, MetadataEntry } from '../types.ts'
+import { METADATA_KEYS } from '../utils/constants.ts'
 import { EIP712_TYPES } from '../utils/eip712.ts'
 
 // Declare window.ethereum for TypeScript
@@ -44,7 +45,7 @@ declare global {
 export class PDPAuthHelper {
   private readonly signer: ethers.Signer
   private readonly domain: ethers.TypedDataDomain
-  public readonly WITH_CDN_METADATA: MetadataEntry = { key: 'withCDN', value: '' }
+  public readonly WITH_CDN_METADATA: MetadataEntry = { key: METADATA_KEYS.WITH_CDN, value: '' }
 
   constructor(serviceContractAddress: string, signer: ethers.Signer, chainId: bigint) {
     this.signer = signer
@@ -276,7 +277,7 @@ export class PDPAuthHelper {
    * const auth = new PDPAuthHelper(contractAddress, signer, chainId)
    * const pieceData = [{
    *   cid: 'bafkzcibc...', // PieceCID of aggregated data
-   *   rawSize: 1024 * 1024     // Raw size in bytes before padding
+   *   rawSize: Number(SIZE_CONSTANTS.MiB)     // Raw size in bytes before padding
    * }]
    * const signature = await auth.signAddPieces(
    *   0,           // Same dataset ID as data set creation

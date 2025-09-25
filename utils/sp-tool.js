@@ -11,7 +11,7 @@
 
 import { ethers } from 'ethers'
 import { SPRegistryService } from '../dist/sp-registry/index.js'
-import { CONTRACT_ADDRESSES } from '../dist/utils/constants.js'
+import { CONTRACT_ADDRESSES, RPC_URLS } from '../dist/utils/constants.js'
 import { getFilecoinNetworkType } from '../dist/utils/network.js'
 import { WarmStorageService } from '../dist/warm-storage/index.js'
 
@@ -386,7 +386,8 @@ WarmStorage Commands:
   warm-list   List WarmStorage approved providers
 
 Options:
-  --rpc-url <url>       RPC endpoint (default: calibration)
+  --network <network>   Network to use: 'mainnet' or 'calibration' (default: calibration)
+  --rpc-url <url>       RPC endpoint (overrides network default)
   --key <private-key>   Private key for signing (required for write operations)
   --registry <address>  Registry contract address (overrides discovery)
   --warm <address>      WarmStorage address (for registry discovery or warm commands)
@@ -399,7 +400,10 @@ Options:
   --location <text>     Provider location (e.g., "us-east")
 
 Examples:
-  # Register a new provider (requires 5 FIL fee)
+  # Register a new provider on mainnet (requires 5 FIL fee)
+  node utils/sp-tool.js register --key 0x... --name "My Provider" --http "https://provider.example.com" --network mainnet
+
+  # Register a new provider on calibration (default network)
   node utils/sp-tool.js register --key 0x... --name "My Provider" --http "https://provider.example.com" --payee 0x...
   
   # Add provider to WarmStorage approved list
@@ -414,9 +418,41 @@ Examples:
     process.exit(0)
   }
 
-  // Setup provider
-  const rpcUrl = options['rpc-url'] || 'https://api.calibration.node.glif.io/rpc/v1'
-  const provider = new ethers.JsonRpcProvider(rpcUrl)
+  // Setup provider based on network flag
+  const network = options.network || 'calibration'
+  if (network !== 'mainnet' && network !== 'calibration') {
+    console.error(`Error: Invalid network '${network}'. Must be 'mainnet' or 'calibration'`)
+    process.exit(1)
+  }
+
+  // Use WebSocket URLs by default for better performance, fallback to HTTP if not available
+  let defaultRpcUrl = RPC_URLS[network]?.websocket
+  if (!defaultRpcUrl) {
+    defaultRpcUrl = RPC_URLS[network]?.http
+  }
+  if (!options['rpc-url'] && !defaultRpcUrl) {
+    console.error(`Error: No RPC URL available for network '${network}'. Please provide --rpc-url.`)
+    process.exit(1)
+  }
+  const rpcUrl = options['rpc-url'] || defaultRpcUrl
+
+  // Smart provider selection based on URL protocol
+  let provider
+  if (/^ws(s)?:\/\//i.test(rpcUrl)) {
+    provider = new ethers.WebSocketProvider(rpcUrl)
+  } else {
+    provider = new ethers.JsonRpcProvider(rpcUrl)
+  }
+
+  // Validate the network matches what was requested
+  const actualNetwork = await getFilecoinNetworkType(provider)
+  if (actualNetwork !== network) {
+    console.error(`Error: Provider connected to ${actualNetwork} network, but ${network} was requested`)
+    process.exit(1)
+  }
+
+  // Print confirmed network
+  console.log(`Connected to Filecoin ${actualNetwork} network`)
 
   // Setup signer if needed
   let signer = null
@@ -430,35 +466,42 @@ Examples:
   }
 
   // Execute command
-  switch (command) {
-    case 'register':
-      await handleRegister(provider, signer, options)
-      break
-    case 'update':
-      await handleUpdate(provider, signer, options)
-      break
-    case 'deregister':
-      await handleDeregister(provider, signer, options)
-      break
-    case 'info':
-      await handleInfo(provider, options)
-      break
-    case 'list':
-      await handleList(provider, options)
-      break
-    case 'warm-add':
-      await handleWarmAdd(provider, signer, options)
-      break
-    case 'warm-remove':
-      await handleWarmRemove(provider, signer, options)
-      break
-    case 'warm-list':
-      await handleWarmList(provider, options)
-      break
-    default:
-      console.error(`Unknown command: ${command}`)
-      console.log('Run "node utils/sp-tool.js help" for usage information')
-      process.exit(1)
+  try {
+    switch (command) {
+      case 'register':
+        await handleRegister(provider, signer, options)
+        break
+      case 'update':
+        await handleUpdate(provider, signer, options)
+        break
+      case 'deregister':
+        await handleDeregister(provider, signer, options)
+        break
+      case 'info':
+        await handleInfo(provider, options)
+        break
+      case 'list':
+        await handleList(provider, options)
+        break
+      case 'warm-add':
+        await handleWarmAdd(provider, signer, options)
+        break
+      case 'warm-remove':
+        await handleWarmRemove(provider, signer, options)
+        break
+      case 'warm-list':
+        await handleWarmList(provider, options)
+        break
+      default:
+        console.error(`Unknown command: ${command}`)
+        console.log('Run "node utils/sp-tool.js help" for usage information')
+        process.exit(1)
+    }
+  } finally {
+    // Clean up provider connection (important for WebSocket providers)
+    if (provider && typeof provider.destroy === 'function') {
+      await provider.destroy()
+    }
   }
 }
 
