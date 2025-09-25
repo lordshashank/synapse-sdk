@@ -267,6 +267,8 @@ describe('Synapse', () => {
       const sessionKeySigner = new ethers.Wallet(PRIVATE_KEYS.key2, provider)
       const sessionKeyAddress = await sessionKeySigner.getAddress()
       const EXPIRY = BigInt(1757618883)
+      const FAKE_SIGNATURE =
+        '0x4355c47d63924e8a72e509b65029052eb6c299d53a04e167c5775fd466751c9d07299936d304c153f6443dfa05f40ff007d72911b6f72307f996231605b915621c'
       server.use(
         JSONRPC({
           ...presets.basic,
@@ -306,6 +308,11 @@ describe('Synapse', () => {
               assert.equal(token, ADDRESSES.calibration.usdfcToken)
               return [BigInt(127001 * 635000000), BigInt(0), BigInt(0), BigInt(0)]
             },
+          },
+          eth_signTypedData_v4: (params) => {
+            const user = params[0]
+            assert.equal(user, sessionKeyAddress)
+            return FAKE_SIGNATURE
           },
         })
       )

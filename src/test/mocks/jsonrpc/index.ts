@@ -150,6 +150,12 @@ function handler(body: RpcRequest, options: JSONRPCOptions) {
 
       throw new Error(`Unknown eth_call to address: ${to}`)
     }
+    case 'eth_signTypedData_v4': {
+      if (!options.eth_signTypedData_v4) {
+        throw new Error('eth_signTypedData_v4 is not defined')
+      }
+      return options.eth_signTypedData_v4(params)
+    }
     default: {
       throw new Error(`Unknown method: ${method}`)
     }
@@ -214,6 +220,9 @@ export const presets = {
     eth_chainId: '0x4cb2f', // 314159
     eth_blockNumber: '0x127001',
     eth_accounts: [ADDRESSES.client1],
+    eth_signTypedData_v4: () => {
+      throw new Error('eth_signTypedData_v4 undefined')
+    },
     warmStorage: {
       pdpVerifierAddress: () => [ADDRESSES.calibration.pdpVerifier],
       paymentsContractAddress: () => [ADDRESSES.calibration.payments],
@@ -286,7 +295,7 @@ export const presets = {
         return [false, ''] // key not found
       },
       clientDataSetIDs: () => {
-        return [[BigInt(0)]]
+        return [BigInt(0)]
       },
     },
     pdpVerifier: {

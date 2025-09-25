@@ -173,14 +173,11 @@ export class PDPAuthHelper {
       // Use EIP-1193 request method
       signature = await eip1193Provider.request({
         method: 'eth_signTypedData_v4',
-        params: [signerAddress.toLowerCase(), JSON.stringify(typedData)],
+        params: [signerAddress, JSON.stringify(typedData)],
       })
     } else {
       // Fallback to send method
-      signature = await (provider as any).send('eth_signTypedData_v4', [
-        signerAddress.toLowerCase(),
-        JSON.stringify(typedData),
-      ])
+      signature = await (provider as any).send('eth_signTypedData_v4', [signerAddress, JSON.stringify(typedData)])
     }
 
     return signature
