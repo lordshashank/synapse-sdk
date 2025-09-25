@@ -260,6 +260,17 @@ describe('Synapse', () => {
 
   describe('Session Keys', () => {
     const FAKE_TX_HASH = '0x3816d82cb7a6f5cde23f4d63c0763050d13c6b6dc659d0a7e6eba80b0ec76a18'
+    const FAKE_TX = {
+      hash: FAKE_TX_HASH,
+      from: ADDRESSES.serviceProvider1,
+      gas: '0x5208',
+      value: '0x0',
+      nonce: '0x444',
+      input: '0x',
+      v: '0x01',
+      r: '0x4e2eef88cc6f2dc311aa3b1c8729b6485bd606960e6ae01522298278932c333a',
+      s: '0x5d0e08d8ecd6ed8034aa956ff593de9dc1d392e73909ef0c0f828918b58327c9',
+    }
     beforeEach(() => {
       server.use(PING())
       const pdpOptions: PDPMockOptions = {
@@ -319,6 +330,11 @@ describe('Synapse', () => {
             const user = params[0]
             assert.equal(user, sessionKeyAddress)
             return FAKE_SIGNATURE
+          },
+          eth_getTransactionByHash: (params) => {
+            const hash = params[0]
+            assert.equal(hash, FAKE_TX_HASH)
+            return FAKE_TX
           },
         })
       )

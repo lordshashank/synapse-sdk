@@ -114,6 +114,12 @@ function handler(body: RpcRequest, options: JSONRPCOptions) {
         throw new Error('eth_accounts is not defined')
       }
       return options.eth_accounts
+    case 'eth_getTransactionByHash': {
+      if (!options.eth_getTransactionByHash) {
+        throw new Error('eth_getTransactionByHash is not defined')
+      }
+      return options.eth_getTransactionByHash(params)
+    }
     case 'eth_call': {
       const { to, data } = params[0]
 
@@ -220,6 +226,9 @@ export const presets = {
     eth_chainId: '0x4cb2f', // 314159
     eth_blockNumber: '0x127001',
     eth_accounts: [ADDRESSES.client1],
+    eth_getTransactionByHash: () => {
+      throw new Error('eth_getTransactionByHash undefined')
+    },
     eth_signTypedData_v4: () => {
       throw new Error('eth_signTypedData_v4 undefined')
     },
