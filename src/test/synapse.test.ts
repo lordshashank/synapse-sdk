@@ -14,6 +14,7 @@ import { PaymentsService } from '../payments/index.ts'
 import { PDP_PERMISSIONS } from '../session/key.ts'
 import { Synapse } from '../synapse.ts'
 import { ADDRESSES, JSONRPC, PRIVATE_KEYS, presets } from './mocks/jsonrpc/index.ts'
+import { createDataSetHandler, type PDPMockOptions } from './mocks/pdp/handlers.ts'
 import { PING } from './mocks/ping.ts'
 
 // mock server for testing
@@ -258,8 +259,13 @@ describe('Synapse', () => {
   })
 
   describe('Session Keys', () => {
+    const FAKE_TX_HASH = '0x3816d82cb7a6f5cde23f4d63c0763050d13c6b6dc659d0a7e6eba80b0ec76a18'
     beforeEach(() => {
       server.use(PING())
+      const pdpOptions: PDPMockOptions = {
+        baseUrl: 'https://pdp.example.com',
+      }
+      server.use(createDataSetHandler(FAKE_TX_HASH, pdpOptions))
     })
 
     it('should storage.createContext with session key', async () => {
