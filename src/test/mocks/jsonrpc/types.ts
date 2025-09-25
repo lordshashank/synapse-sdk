@@ -21,6 +21,7 @@ export interface JSONRPCOptions {
   eth_chainId?: string
   eth_blockNumber?: string
   eth_getTransactionByHash?: (params: any) => any
+  eth_getTransactionReceipt?: (params: any) => any
   eth_signTypedData_v4?: (params: any) => string
   eth_accounts?: string[]
   warmStorage?: WarmStorageOptions

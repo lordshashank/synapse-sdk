@@ -13,6 +13,7 @@ import { type Address, isAddressEqual, parseUnits } from 'viem'
 import { PaymentsService } from '../payments/index.ts'
 import { PDP_PERMISSIONS } from '../session/key.ts'
 import { Synapse } from '../synapse.ts'
+import { makeDataSetCreatedLog } from './mocks/events.ts'
 import { ADDRESSES, JSONRPC, PRIVATE_KEYS, presets } from './mocks/jsonrpc/index.ts'
 import { createDataSetHandler, dataSetCreationStatusHandler, type PDPMockOptions } from './mocks/pdp/handlers.ts'
 import { PING } from './mocks/ping.ts'
@@ -272,6 +273,17 @@ describe('Synapse', () => {
       r: '0x4e2eef88cc6f2dc311aa3b1c8729b6485bd606960e6ae01522298278932c333a',
       s: '0x5d0e08d8ecd6ed8034aa956ff593de9dc1d392e73909ef0c0f828918b58327c9',
     }
+    const FAKE_RECEIPT = {
+      ...FAKE_TX,
+      transactionHash: FAKE_TX_HASH,
+      transactionIndex: '0x10',
+      blockHash: '0xb91b7314248aaae06f080ad427dbae78b8c5daf72b2446cf843739aef80c6417',
+      status: '0x1',
+      blockNumber: '0x127001',
+      cumulativeGasUsed: '0x52080',
+      gasUsed: '0x5208',
+      logs: [makeDataSetCreatedLog(DATA_SET_ID, 1)],
+    }
     beforeEach(() => {
       server.use(PING())
       const pdpOptions: PDPMockOptions = {
@@ -284,6 +296,10 @@ describe('Synapse', () => {
           {
             ok: true,
             dataSetId: DATA_SET_ID,
+            createMessageHash: '',
+            dataSetCreated: true,
+            service: '',
+            txStatus: '',
           },
           pdpOptions
         )
@@ -346,6 +362,11 @@ describe('Synapse', () => {
             const hash = params[0]
             assert.equal(hash, FAKE_TX_HASH)
             return FAKE_TX
+          },
+          eth_getTransactionReceipt: (params) => {
+            const hash = params[0]
+            assert.equal(hash, FAKE_TX_HASH)
+            return FAKE_RECEIPT
           },
         })
       )

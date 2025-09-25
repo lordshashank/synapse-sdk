@@ -120,6 +120,12 @@ function handler(body: RpcRequest, options: JSONRPCOptions) {
       }
       return options.eth_getTransactionByHash(params)
     }
+    case 'eth_getTransactionReceipt': {
+      if (!options.eth_getTransactionReceipt) {
+        throw new Error('eth_getTransactionReceipt is not defined')
+      }
+      return options.eth_getTransactionReceipt(params)
+    }
     case 'eth_call': {
       const { to, data } = params[0]
 
@@ -228,6 +234,9 @@ export const presets = {
     eth_accounts: [ADDRESSES.client1],
     eth_getTransactionByHash: () => {
       throw new Error('eth_getTransactionByHash undefined')
+    },
+    eth_getTransactionReceipt: () => {
+      throw new Error('eth_getTransactionReceipt undefined')
     },
     eth_signTypedData_v4: () => {
       throw new Error('eth_signTypedData_v4 undefined')
