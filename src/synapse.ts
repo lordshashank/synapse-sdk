@@ -242,7 +242,8 @@ export class Synapse {
    * const HOUR_MILLIS = 1000 * 60 * 60
    * if (sessionKey.expiries[ADD_PIECES_TYPEHASH] * 1000 < Date.now() + HOUR_MILLIS) {
    *   const DAY_MILLIS = 24 * HOUR_MILLIS
-   *   await sessionKey.login(BigInt(Date.now() / 1000 + 30 * DAY_MILLIS), PDP_PERMISSIONS)
+   *   const loginTx = await sessionKey.login(BigInt(Date.now()) / BigInt(1000 + 30 * DAY_MILLIS), PDP_PERMISSIONS)
+   *   const loginReceipt = await loginTx.wait()
    * }
    *
    * const context = await synapse.storage.createContext()

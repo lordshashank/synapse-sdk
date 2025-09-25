@@ -13,7 +13,8 @@
  * await sessionKey.fetchExpiries()
  * if (sessionKey.expiries[ADD_PIECES_TYPEHASH] * 1000 < Date.now() + HOUR_MILLIS) {
  *   const DAY_MILLIS = 24 * HOUR_MILLIS
- *   await sessionKey.login(BigInt(Date.now() / 1000 + 30 * DAY_MILLIS), PDP_PERMISSIONS)
+ *   const loginTx = await sessionKey.login(BigInt(Date.now()) / BigInt(1000 + 30 * DAY_MILLIS), PDP_PERMISSIONS)
+ *   const loginReceipt = await loginTx.wait()
  * }
  * ```
  */
@@ -34,6 +35,13 @@ export const PDP_PERMISSIONS = [
   DELETE_DATA_SET_TYPEHASH,
 ]
 
+export const PDP_PERMISSION_NAMES: Record<string, string> = {
+  [CREATE_DATA_SET_TYPEHASH]: 'CreateDataSet',
+  [ADD_PIECES_TYPEHASH]: 'AddPieces',
+  [SCHEDULE_PIECE_REMOVALS_TYPEHASH]: 'SchedulePieceRemovals',
+  [DELETE_DATA_SET_TYPEHASH]: 'DeleteDataSet',
+}
+
 export class SessionKey {
   private readonly _provider: ethers.Provider
   private readonly _registry: ethers.Contract
@@ -48,7 +56,7 @@ export class SessionKey {
     owner: ethers.Signer
   ) {
     this._provider = provider
-    this._registry = sessionKeyRegistry
+    this._registry = sessionKeyRegistry.connect(owner) as ethers.Contract
     this._signer = signer
     this._owner = owner
     this.expiries = {
@@ -112,7 +120,7 @@ export class SessionKey {
    * @param expiry unix time (block.timestamp) that the permissions expire
    * @param permissions list of permissions granted to the signer
    */
-  async login(expiry: bigint, permissions: string[] = PDP_PERMISSIONS): Promise<void> {
-    await this._registry.login(await this._signer.getAddress(), expiry, permissions)
+  async login(expiry: bigint, permissions: string[] = PDP_PERMISSIONS): Promise<ethers.TransactionResponse> {
+    return await this._registry.login(await this._signer.getAddress(), expiry, permissions)
   }
 }
