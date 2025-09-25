@@ -24,6 +24,8 @@ export type getAllPieceMetadata = ExtractAbiFunction<typeof CONTRACT_ABIS.WARM_S
 
 export type getPieceMetadata = ExtractAbiFunction<typeof CONTRACT_ABIS.WARM_STORAGE_VIEW, 'getPieceMetadata'>
 
+export type clientDataSetIDs = ExtractAbiFunction<typeof CONTRACT_ABIS.WARM_STORAGE_VIEW, 'clientDataSetIDs'>
+
 export interface WarmStorageViewOptions {
   isProviderApproved?: (args: AbiToType<isProviderApproved['inputs']>) => AbiToType<isProviderApproved['outputs']>
   getClientDataSets?: (args: AbiToType<getClientDataSets['inputs']>) => AbiToType<getClientDataSets['outputs']>
@@ -35,6 +37,7 @@ export interface WarmStorageViewOptions {
   getDataSetMetadata?: (args: AbiToType<getDataSetMetadata['inputs']>) => AbiToType<getDataSetMetadata['outputs']>
   getAllPieceMetadata?: (args: AbiToType<getAllPieceMetadata['inputs']>) => AbiToType<getAllPieceMetadata['outputs']>
   getPieceMetadata?: (args: AbiToType<getPieceMetadata['inputs']>) => AbiToType<getPieceMetadata['outputs']>
+  clientDataSetIDs?: (args: AbiToType<clientDataSetIDs['inputs']>) => AbiToType<clientDataSetIDs['outputs']>
 }
 
 /**
@@ -261,6 +264,16 @@ export function warmStorageViewCallHandler(data: Hex, options: JSONRPCOptions): 
         CONTRACT_ABIS.WARM_STORAGE_VIEW.find((abi) => abi.type === 'function' && abi.name === 'getPieceMetadata')!
           .outputs,
         options.warmStorageView.getPieceMetadata(args)
+      )
+    }
+    case 'clientDataSetIDs': {
+      if (!options.warmStorageView?.clientDataSetIDs) {
+        throw new Error('Warm Storage View: clientDataSetIDs is not defined')
+      }
+      return encodeAbiParameters(
+        CONTRACT_ABIS.WARM_STORAGE_VIEW.find((abi) => abi.type === 'function' && abi.name === 'clientDataSetIDs')!
+          .outputs,
+        options.warmStorageView.clientDataSetIDs(args)
       )
     }
 
