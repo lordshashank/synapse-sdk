@@ -373,8 +373,7 @@ describe('Synapse', () => {
       }
 
       const context = await synapse.storage.createContext()
-      // biome-ignore lint/complexity/useLiteralKeys: checking private
-      assert.equal(context['_signer'], sessionKeySigner)
+      assert.equal((context as any)._signer, sessionKeySigner)
       const info = await context.preflightUpload(127)
       assert.isTrue(info.allowanceCheck.sufficient)
 
