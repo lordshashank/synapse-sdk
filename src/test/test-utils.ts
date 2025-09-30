@@ -46,7 +46,11 @@ export function createMockSigner(address: string = MOCK_ADDRESSES.SIGNER, provid
       return '0xsignedmessage'
     },
     async signTypedData() {
-      return '0xsignedtypeddata'
+      // Return a dummy 65-byte signature: r (32 bytes) + s (32 bytes) + v (1 byte)
+      const r = '11'.repeat(32)
+      const s = '22'.repeat(32)
+      const v = '1b' // 27 in hex
+      return `0x${r}${s}${v}`
     },
     connect(newProvider: any) {
       return createMockSigner(address, newProvider)
@@ -86,30 +90,67 @@ export function createMockProvider(chainId: number = 314159): ethers.Provider {
 
       // Mock Multicall3 aggregate3 calls - function selector: 0x82ad56cb
       if (to === CONTRACT_ADDRESSES.MULTICALL3.calibration.toLowerCase() && data?.startsWith('0x82ad56cb')) {
-        // Return mock addresses for all 5 getter functions
-        const mockAddresses = [
-          MOCK_ADDRESSES.PDP_VERIFIER, // pdpVerifier
-          MOCK_ADDRESSES.PAYMENTS, // payments
-          CONTRACT_ADDRESSES.USDFC.calibration, // usdfcToken
-          '0x0000000000000000000000000000000000000000', // filCDN (not used)
-          MOCK_ADDRESSES.WARM_STORAGE_VIEW, // viewContract
-          '0x0000000000000000000000000000000000000001', // spRegistry
-        ]
+        // Decode the multicall to get individual calls
+        const multicallInterface = new ethers.Interface([
+          'function aggregate3(tuple(address target, bool allowFailure, bytes callData)[] calls) returns (tuple(bool success, bytes returnData)[])',
+        ])
+        const decoded = multicallInterface.decodeFunctionData('aggregate3', data)
+        const calls = decoded[0]
 
-        // Encode the response as Multicall3 would
-        const results = mockAddresses.map((addr) => ({
-          success: true,
-          returnData: ethers.AbiCoder.defaultAbiCoder().encode(['address'], [addr]),
-        }))
+        // Execute each call individually through the mock
+        const resultPromises = calls.map(async (call: any) => {
+          try {
+            const result = await provider.call({ to: call.target, data: call.callData })
+            return {
+              success: true,
+              returnData: result,
+            }
+          } catch (error) {
+            if (call.allowFailure) {
+              return {
+                success: false,
+                returnData: '0x',
+              }
+            }
+            throw error
+          }
+        })
 
-        return ethers.AbiCoder.defaultAbiCoder().encode(['tuple(bool success, bytes returnData)[]'], [results])
+        return Promise.all(resultPromises).then((resolvedResults) => {
+          return ethers.AbiCoder.defaultAbiCoder().encode(
+            ['tuple(bool success, bytes returnData)[]'],
+            [resolvedResults]
+          )
+        })
       }
 
-      // Mock viewContractAddress response - function selector: 0x7a9ebc15
-      if (data?.startsWith('0x7a9ebc15') === true) {
-        // Return a mock view contract address (not zero address!)
-        const viewAddress = MOCK_ADDRESSES.WARM_STORAGE_VIEW // Use a real-looking address
-        return ethers.AbiCoder.defaultAbiCoder().encode(['address'], [viewAddress])
+      // WarmStorage getter functions (called during WarmStorageService.create())
+      // Only handle these if the call is to the WarmStorage contract
+      if (to === MOCK_ADDRESSES.WARM_STORAGE.toLowerCase()) {
+        // pdpVerifierAddress() - function selector: 0xde4b6b71
+        if (data?.startsWith('0xde4b6b71') === true) {
+          return ethers.AbiCoder.defaultAbiCoder().encode(['address'], [MOCK_ADDRESSES.PDP_VERIFIER])
+        }
+        // paymentsContractAddress() - function selector: 0xbc471469
+        if (data?.startsWith('0xbc471469') === true) {
+          return ethers.AbiCoder.defaultAbiCoder().encode(['address'], [MOCK_ADDRESSES.PAYMENTS])
+        }
+        // usdfcTokenAddress() - function selector: 0xd39b33ab
+        if (data?.startsWith('0xd39b33ab') === true) {
+          return ethers.AbiCoder.defaultAbiCoder().encode(['address'], [CONTRACT_ADDRESSES.USDFC.calibration])
+        }
+        // filCDNBeneficiaryAddress() - function selector: 0xce4f8d8b
+        if (data?.startsWith('0xce4f8d8b') === true) {
+          return ethers.AbiCoder.defaultAbiCoder().encode(['address'], ['0x0000000000000000000000000000000000000000'])
+        }
+        // viewContractAddress() - function selector: 0x7a9ebc15
+        if (data?.startsWith('0x7a9ebc15') === true) {
+          return ethers.AbiCoder.defaultAbiCoder().encode(['address'], [MOCK_ADDRESSES.WARM_STORAGE_VIEW])
+        }
+        // serviceProviderRegistry() - function selector: 0x05f892ec
+        if (data?.startsWith('0x05f892ec') === true) {
+          return ethers.AbiCoder.defaultAbiCoder().encode(['address'], ['0x0000000000000000000000000000000000000001'])
+        }
       }
 
       // Mock getServicePrice response for WarmStorage contract - function selector: 0x7bca0328
@@ -129,11 +170,27 @@ export function createMockProvider(chainId: number = 314159): ethers.Provider {
           [pricePerTiBPerMonth, tokenAddress, epochsPerMonth]
         )
       }
+      // ERC20.balanceOf(address)
       if (data.includes('70a08231') === true) {
         return ethers.zeroPadValue(ethers.toBeHex(ethers.parseUnits('1000', 18)), 32)
       }
+      // ERC20.decimals()
       if (data.includes('313ce567') === true) {
         return ethers.zeroPadValue(ethers.toBeHex(18), 32)
+      }
+      // ERC20.name()
+      if (data.startsWith('0x06fdde03') === true) {
+        // Return "USDFC"
+        return ethers.AbiCoder.defaultAbiCoder().encode(['string'], ['USDFC'])
+      }
+      // ERC20Permit.nonces(address)
+      if (data.startsWith('0x7ecebe00') === true) {
+        // Return nonce 0
+        return ethers.zeroPadValue(ethers.toBeHex(0), 32)
+      }
+      // ERC20Permit.version()
+      if (data.startsWith('0x54fd4d50') === true) {
+        return ethers.AbiCoder.defaultAbiCoder().encode(['string'], ['1'])
       }
       if (data.includes('dd62ed3e') === true) {
         return ethers.zeroPadValue(ethers.toBeHex(0), 32)
