@@ -153,6 +153,10 @@ export function createMockProvider(chainId: number = 314159): ethers.Provider {
         if (data?.startsWith('0x05f892ec') === true) {
           return ethers.AbiCoder.defaultAbiCoder().encode(['address'], ['0x0000000000000000000000000000000000000001'])
         }
+        // sessionKeyRegistry() - function selector: 0x9f6aa572
+        if (data?.startsWith('0x9f6aa572') === true) {
+          return ethers.AbiCoder.defaultAbiCoder().encode(['address'], [MOCK_ADDRESSES.SESSION_KEY_REGISTRY])
+        }
       }
 
       // Mock getServicePrice response for WarmStorage contract - function selector: 0x7bca0328
