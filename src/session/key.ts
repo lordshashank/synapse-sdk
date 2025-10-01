@@ -50,12 +50,12 @@ export class SessionKey {
 
   public constructor(
     provider: ethers.Provider,
-    sessionKeyRegistry: ethers.Contract,
+    sessionKeyRegistryAddress: string,
     signer: ethers.Signer,
     owner: ethers.Signer
   ) {
     this._provider = provider
-    this._registry = sessionKeyRegistry.connect(owner) as ethers.Contract
+    this._registry = new ethers.Contract(sessionKeyRegistryAddress, CONTRACT_ABIS.SESSION_KEY_REGISTRY, owner)
     this._signer = signer
     this._owner = owner
   }

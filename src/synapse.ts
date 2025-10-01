@@ -252,7 +252,7 @@ export class Synapse {
   setSession(sessionKeySigner: ethers.Signer): SessionKey {
     this._session = new SessionKey(
       this._provider,
-      this._warmStorageService.getSessionKeyRegistry(),
+      this._warmStorageService.getSessionKeyRegistryAddress(),
       sessionKeySigner,
       this._signer
     )
