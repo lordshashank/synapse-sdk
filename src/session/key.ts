@@ -20,13 +20,13 @@
  */
 
 import { ethers } from 'ethers'
-import { getEIP712TypeString } from '../utils/eip712.ts'
+import { EIP712_TYPE_HASHES } from '../utils/eip712.ts'
 import { CONTRACT_ABIS, CONTRACT_ADDRESSES, getFilecoinNetworkType } from '../utils/index.ts'
 
-export const CREATE_DATA_SET_TYPEHASH = ethers.id(getEIP712TypeString('CreateDataSet'))
-export const ADD_PIECES_TYPEHASH = ethers.id(getEIP712TypeString('AddPieces'))
-export const SCHEDULE_PIECE_REMOVALS_TYPEHASH = ethers.id(getEIP712TypeString('SchedulePieceRemovals'))
-export const DELETE_DATA_SET_TYPEHASH = ethers.id(getEIP712TypeString('DeleteDataSet'))
+export const CREATE_DATA_SET_TYPEHASH = EIP712_TYPE_HASHES.CreateDataSet
+export const ADD_PIECES_TYPEHASH = EIP712_TYPE_HASHES.AddPieces
+export const SCHEDULE_PIECE_REMOVALS_TYPEHASH = EIP712_TYPE_HASHES.SchedulePieceRemovals
+export const DELETE_DATA_SET_TYPEHASH = EIP712_TYPE_HASHES.DeleteDataSet
 
 export const PDP_PERMISSIONS = [
   CREATE_DATA_SET_TYPEHASH,
