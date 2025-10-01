@@ -130,54 +130,78 @@ describe('Metadata-based Data Set Selection', () => {
         ...presets.basic,
         warmStorageView: {
           ...presets.basic.warmStorageView,
-          railToDataSet: (args: any) => {
-            const [railId] = args
-            // Map rail IDs directly to data set IDs for this test
-            return [railId] // railId 1 -> dataSetId 1, railId 2 -> dataSetId 2, etc.
-          },
-          getClientDataSets: () => [
-            [
+          clientDataSets: () => [[1n, 2n, 3n]],
+          // Provide base dataset info per dataset id
+          getDataSet: (args: any) => {
+            const [dataSetId] = args as [bigint]
+            if (dataSetId === 1n) {
+              return [
+                {
+                  pdpRailId: 1n,
+                  cacheMissRailId: 0n,
+                  cdnRailId: 0n,
+                  payer: ADDRESSES.client1,
+                  payee: ADDRESSES.serviceProvider1,
+                  serviceProvider: ADDRESSES.serviceProvider1,
+                  commissionBps: 100n,
+                  clientDataSetId: 0n,
+                  pdpEndEpoch: 0n,
+                  providerId: 1n,
+                  cdnEndEpoch: 0n,
+                },
+              ]
+            }
+            if (dataSetId === 2n) {
+              return [
+                {
+                  pdpRailId: 2n,
+                  cacheMissRailId: 0n,
+                  cdnRailId: 100n,
+                  payer: ADDRESSES.client1,
+                  payee: ADDRESSES.serviceProvider1,
+                  serviceProvider: ADDRESSES.serviceProvider1,
+                  commissionBps: 100n,
+                  clientDataSetId: 1n,
+                  pdpEndEpoch: 0n,
+                  providerId: 1n,
+                  cdnEndEpoch: 0n,
+                },
+              ]
+            }
+            if (dataSetId === 3n) {
+              return [
+                {
+                  pdpRailId: 3n,
+                  cacheMissRailId: 0n,
+                  cdnRailId: 0n,
+                  payer: ADDRESSES.client1,
+                  payee: ADDRESSES.serviceProvider2,
+                  serviceProvider: ADDRESSES.serviceProvider2,
+                  commissionBps: 100n,
+                  clientDataSetId: 2n,
+                  pdpEndEpoch: 0n,
+                  providerId: 2n,
+                  cdnEndEpoch: 0n,
+                },
+              ]
+            }
+            // default empty/non-existent
+            return [
               {
-                pdpRailId: 1n,
+                pdpRailId: 0n,
                 cacheMissRailId: 0n,
-                cdnRailId: 0n, // No CDN
-                payer: ADDRESSES.client1,
-                payee: ADDRESSES.serviceProvider1,
-                serviceProvider: ADDRESSES.serviceProvider1,
-                commissionBps: 100n,
+                cdnRailId: 0n,
+                payer: ethers.ZeroAddress,
+                payee: ethers.ZeroAddress,
+                serviceProvider: ethers.ZeroAddress,
+                commissionBps: 0n,
                 clientDataSetId: 0n,
                 pdpEndEpoch: 0n,
-                providerId: 1n,
+                providerId: 0n,
                 cdnEndEpoch: 0n,
               },
-              {
-                pdpRailId: 2n,
-                cacheMissRailId: 0n,
-                cdnRailId: 100n, // Has CDN
-                payer: ADDRESSES.client1,
-                payee: ADDRESSES.serviceProvider1,
-                serviceProvider: ADDRESSES.serviceProvider1,
-                commissionBps: 100n,
-                clientDataSetId: 1n,
-                pdpEndEpoch: 0n,
-                providerId: 1n,
-                cdnEndEpoch: 0n,
-              },
-              {
-                pdpRailId: 3n,
-                cacheMissRailId: 0n,
-                cdnRailId: 0n, // No CDN
-                payer: ADDRESSES.client1,
-                payee: ADDRESSES.serviceProvider2,
-                serviceProvider: ADDRESSES.serviceProvider2,
-                commissionBps: 100n,
-                clientDataSetId: 2n,
-                pdpEndEpoch: 0n,
-                providerId: 2n,
-                cdnEndEpoch: 0n,
-              },
-            ],
-          ],
+            ]
+          },
           getAllDataSetMetadata: (args: any) => {
             const [dataSetId] = args
             if (dataSetId === 1n) {

@@ -355,32 +355,18 @@ export class WarmStorageService {
    * @returns Array of enhanced data set information
    */
   async getClientDataSetsWithDetails(client: string, onlyManaged: boolean = false): Promise<EnhancedDataSetInfo[]> {
-    const dataSets = await this.getClientDataSets(client)
     const pdpVerifier = this._getPDPVerifier()
     const viewContract = this._getWarmStorageViewContract()
 
-    // Process all data sets in parallel
-    const enhancedDataSetsPromises = dataSets.map(async (dataSet) => {
-      try {
-        // Get the actual PDPVerifier data set ID from the rail ID (using pdpRailId now)
-        const pdpVerifierDataSetId = Number(await viewContract.railToDataSet(dataSet.pdpRailId))
+    // Query dataset IDs directly from the view contract
+    const ids: bigint[] = await viewContract.clientDataSets(client)
+    if (ids.length === 0) return []
 
-        // Check if this is a valid rail (rails should be > 0)
-        // Note: dataSetId can be 0 (legitimate first data set), but pdpRailId should never be 0
-        if (dataSet.pdpRailId === 0) {
-          return onlyManaged
-            ? null // Will be filtered out
-            : {
-                ...dataSet,
-                pdpVerifierDataSetId: 0,
-                nextPieceId: 0,
-                currentPieceCount: 0,
-                isLive: false,
-                isManaged: false,
-                withCDN: dataSet.cdnRailId > 0, // CDN is enabled if cdnRailId is non-zero (should be more reliable than metadata)
-                metadata: Object.create(null) as Record<string, string>,
-              }
-        }
+    // Enhance all in parallel using dataset IDs
+    const enhancedDataSetsPromises = ids.map(async (idBigInt) => {
+      const pdpVerifierDataSetId = Number(idBigInt)
+      try {
+        const base = await this.getDataSet(pdpVerifierDataSetId)
 
         // Parallelize independent calls
         const [isLive, listenerResult, metadata] = await Promise.all([
@@ -399,24 +385,21 @@ export class WarmStorageService {
         }
 
         // Get next piece ID only if the data set is live
-        const nextPieceId = isLive ? await pdpVerifier.getNextPieceId(pdpVerifierDataSetId) : 0
+        const nextPieceId = isLive ? await pdpVerifier.getNextPieceId(pdpVerifierDataSetId) : 0n
 
         return {
-          ...dataSet,
+          ...base,
           pdpVerifierDataSetId,
           nextPieceId: Number(nextPieceId),
           currentPieceCount: Number(nextPieceId),
           isLive,
           isManaged,
-          withCDN: dataSet.cdnRailId > 0, // CDN is enabled if cdnRailId is non-zero
+          withCDN: base.cdnRailId > 0,
           metadata,
         }
       } catch (error) {
-        // Re-throw the error to let the caller handle it
         throw new Error(
-          `Failed to get details for data set with enhanced info ${dataSet.pdpRailId}: ${
-            error instanceof Error ? error.message : String(error)
-          }`
+          `Failed to get details for data set ${pdpVerifierDataSetId}: ${error instanceof Error ? error.message : String(error)}`
         )
       }
     })

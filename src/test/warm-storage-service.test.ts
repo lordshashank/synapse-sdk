@@ -311,31 +311,12 @@ describe('WarmStorageService', () => {
       const warmStorageService = await createWarmStorageService()
       // Mock provider for multiple contract calls
       cleanup = mockProviderWithView((data) => {
-        // getClientDataSets call
-        if (data?.startsWith('0x967c6f21') === true) {
-          const dataSet = [
-            48n, // pdpRailId
-            0n, // cacheMissRailId
-            0n, // cdnRailId
-            clientAddress, // payer
-            '0xabcdef1234567890123456789012345678901234', // payee
-            '0xabcdef1234567890123456789012345678901234', // serviceProvider
-            100n, // commissionBps
-            0n, // clientDataSetId
-            0n, // pdpEndEpoch
-            1n, // providerId
-            0n, // cdnEndEpoch
-          ]
-          return viewInterface.encodeFunctionResult('getClientDataSets', [[dataSet]])
+        // clientDataSets(address) selector: 0x7dab7c40
+        if (data?.startsWith('0x7dab7c40') === true) {
+          return viewInterface.encodeFunctionResult('clientDataSets', [[242n]])
         }
 
-        // railToDataSet call
-        if (data?.startsWith('0x2ad6e6b5') === true) {
-          // railToDataSet(uint256) selector
-          return ethers.zeroPadValue('0xf2', 32) // Return data set ID 242
-        }
-
-        // dataSetId call
+        // dataSetLive call (using existing selector used in tests)
         if (data?.startsWith('0xca759f27') === true) {
           // dataSetId(uint256) selector
           return ethers.zeroPadValue('0x01', 32) // Return true
@@ -351,6 +332,24 @@ describe('WarmStorageService', () => {
         if (data?.startsWith('0x2b3129bb') === true) {
           // getDataSetListener(uint256) selector
           return ethers.zeroPadValue(mockWarmStorageAddress, 32)
+        }
+
+        // getDataSet(view) for PDPVerifier dataset id 242
+        if (data?.startsWith('0xbdaac056') === true) {
+          const dataSetInfo = {
+            pdpRailId: 48,
+            cacheMissRailId: 0,
+            cdnRailId: 0,
+            payer: clientAddress,
+            payee: '0xabcdef1234567890123456789012345678901234',
+            serviceProvider: '0xabcdef1234567890123456789012345678901234',
+            commissionBps: 100,
+            clientDataSetId: 0,
+            pdpEndEpoch: 0,
+            providerId: 1,
+            cdnEndEpoch: 0,
+          }
+          return viewInterface.encodeFunctionResult('getDataSet', [dataSetInfo])
         }
 
         return null
@@ -376,51 +375,9 @@ describe('WarmStorageService', () => {
     it('should filter unmanaged data sets when onlyManaged is true', async () => {
       const warmStorageService = await createWarmStorageService()
       cleanup = mockProviderWithView((data) => {
-        // getClientDataSets - return 2 data sets
-        if (data?.startsWith('0x967c6f21') === true) {
-          const dataSets = [
-            [
-              48n,
-              0n,
-              0n,
-              clientAddress,
-              '0xabc1234567890123456789012345678901234567',
-              '0xabc1234567890123456789012345678901234567', // serviceProvider
-              100n,
-              0n,
-              0n, // pdpEndEpoch
-              1n, // providerId
-              0n, // cdnEndEpoch
-            ],
-            [
-              49n,
-              0n,
-              0n,
-              clientAddress,
-              '0xdef1234567890123456789012345678901234567',
-              '0xdef1234567890123456789012345678901234567', // serviceProvider
-              100n,
-              1n,
-              0n, // pdpEndEpoch
-              2n, // providerId
-              0n, // cdnEndEpoch
-            ],
-          ]
-          return viewInterface.encodeFunctionResult('getClientDataSets', [dataSets])
-        }
-
-        // railToDataSet - both return valid IDs
-        if (data?.startsWith('0x2ad6e6b5') === true) {
-          // Extract the rail ID from the encoded data
-          const railIdHex = data.slice(10, 74) // Skip function selector and get 32 bytes
-          if (railIdHex === ethers.zeroPadValue('0x30', 32).slice(2)) {
-            // rail ID 48
-            return ethers.zeroPadValue('0xf2', 32) // 242
-          } else if (railIdHex === ethers.zeroPadValue('0x31', 32).slice(2)) {
-            // rail ID 49
-            return ethers.zeroPadValue('0xf3', 32) // 243
-          }
-          return ethers.zeroPadValue('0x00', 32) // 0
+        // clientDataSets(address) selector: 0x7dab7c40
+        if (data?.startsWith('0x7dab7c40') === true) {
+          return viewInterface.encodeFunctionResult('clientDataSets', [[242n, 243n]])
         }
 
         // dataSetId - both are live
@@ -447,6 +404,30 @@ describe('WarmStorageService', () => {
           return ethers.zeroPadValue('0x01', 32)
         }
 
+        // getDataSet(view) for each dataset id
+        if (data?.startsWith('0xbdaac056') === true) {
+          // Determine which ID was requested by inspecting calldata (not strictly necessary for mock)
+          // Return appropriate base info so pdpRailId differs
+          const dataSetIdHex = data.slice(10, 74)
+          const baseInfo = (id: number) => ({
+            pdpRailId: id === 242 ? 48 : 49,
+            cacheMissRailId: 0,
+            cdnRailId: 0,
+            payer: clientAddress,
+            payee:
+              id === 242 ? '0xabc1234567890123456789012345678901234567' : '0xdef1234567890123456789012345678901234567',
+            serviceProvider:
+              id === 242 ? '0xabc1234567890123456789012345678901234567' : '0xdef1234567890123456789012345678901234567',
+            commissionBps: 100,
+            clientDataSetId: id === 242 ? 0 : 1,
+            pdpEndEpoch: 0,
+            providerId: id === 242 ? 1 : 2,
+            cdnEndEpoch: 0,
+          })
+          const id = dataSetIdHex === ethers.zeroPadValue('0xf2', 32).slice(2) ? 242 : 243
+          return viewInterface.encodeFunctionResult('getDataSet', [baseInfo(id)])
+        }
+
         return null
       })
 
@@ -465,28 +446,15 @@ describe('WarmStorageService', () => {
 
     it('should throw error when contract calls fail', async () => {
       const warmStorageService = await createWarmStorageService()
-      // Mock getClientDataSets to return a data set
+      // Mock clientDataSets to return a data set ID, then cause failure in subsequent call
       cleanup = mockProviderWithView((data) => {
-        // getClientDataSets - return 1 data set
-        if (data?.startsWith('0x967c6f21') === true) {
-          const dataSet = [
-            48n,
-            0n,
-            0n,
-            clientAddress,
-            '0xabc1234567890123456789012345678901234567',
-            100n,
-            'Test1',
-            [],
-            0n,
-            0n, // paymentEndEpoch
-            1n, // providerId
-          ]
-          return viewInterface.encodeFunctionResult('getClientDataSets', [[dataSet]])
+        // clientDataSets(address) selector: 0x7dab7c40
+        if (data?.startsWith('0x7dab7c40') === true) {
+          return viewInterface.encodeFunctionResult('clientDataSets', [[242n]])
         }
 
-        // railToDataSet - throw error
-        if (data?.startsWith('0x2ad6e6b5') === true) {
+        // Cause failure during getDataSet(view)
+        if (data?.startsWith('0xbdaac056') === true) {
           throw new Error('Contract call failed')
         }
 
@@ -499,8 +467,8 @@ describe('WarmStorageService', () => {
         await warmStorageService.getClientDataSetsWithDetails(clientAddress)
         assert.fail('Should have thrown error')
       } catch (error: any) {
-        // Error now happens in getClientDataSets due to type mismatch
-        assert.include(error.message, 'Failed to get client data sets')
+        assert.include(error.message, 'Failed to get details for data set')
+        assert.include(error.message, 'Contract call failed')
       }
     })
   })
@@ -510,37 +478,42 @@ describe('WarmStorageService', () => {
       const warmStorageService = await createWarmStorageService()
       // Set up mocks similar to above
       cleanup = mockProviderWithView((data) => {
-        if (data?.startsWith('0x967c6f21') === true) {
-          const dataSet = [
-            48n,
-            0n,
-            0n,
-            clientAddress,
-            '0xabc1234567890123456789012345678901234567',
-            '0xabc1234567890123456789012345678901234567', // serviceProvider
-            100n,
-            0n,
-            0n, // pdpEndEpoch
-            1n, // providerId
-            0n, // cdnEndEpoch
-          ]
-          return viewInterface.encodeFunctionResult('getClientDataSets', [[dataSet]])
+        // clientDataSets(address) -> [242]
+        if (data?.startsWith('0x7dab7c40') === true) {
+          return viewInterface.encodeFunctionResult('clientDataSets', [[242n]])
         }
 
-        if (data?.startsWith('0x2ad6e6b5') === true) {
-          return ethers.zeroPadValue('0xf2', 32)
-        }
-
+        // dataSetLive
         if (data?.startsWith('0xca759f27') === true) {
           return ethers.zeroPadValue('0x01', 32)
         }
 
+        // getDataSetListener -> managed by warm storage
         if (data?.startsWith('0x2b3129bb') === true) {
           return ethers.zeroPadValue(mockWarmStorageAddress, 32)
         }
 
+        // getNextPieceId
         if (data?.startsWith('0x1c5ae80f') === true) {
           return ethers.zeroPadValue('0x01', 32)
+        }
+
+        // getDataSet(view)
+        if (data?.startsWith('0xbdaac056') === true) {
+          const info = {
+            pdpRailId: 48,
+            cacheMissRailId: 0,
+            cdnRailId: 0,
+            payer: clientAddress,
+            payee: '0xabc1234567890123456789012345678901234567',
+            serviceProvider: '0xabc1234567890123456789012345678901234567',
+            commissionBps: 100,
+            clientDataSetId: 0,
+            pdpEndEpoch: 0,
+            providerId: 1,
+            cdnEndEpoch: 0,
+          }
+          return viewInterface.encodeFunctionResult('getDataSet', [info])
         }
 
         return null

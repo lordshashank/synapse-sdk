@@ -14,6 +14,10 @@ export type railToDataSet = ExtractAbiFunction<typeof CONTRACT_ABIS.WARM_STORAGE
 
 export type getClientDataSets = ExtractAbiFunction<typeof CONTRACT_ABIS.WARM_STORAGE_VIEW, 'getClientDataSets'>
 
+export type clientDataSets = ExtractAbiFunction<typeof CONTRACT_ABIS.WARM_STORAGE_VIEW, 'clientDataSets'>
+
+export type getDataSet = ExtractAbiFunction<typeof CONTRACT_ABIS.WARM_STORAGE_VIEW, 'getDataSet'>
+
 export type getApprovedProviders = ExtractAbiFunction<typeof CONTRACT_ABIS.WARM_STORAGE_VIEW, 'getApprovedProviders'>
 
 export type getAllDataSetMetadata = ExtractAbiFunction<typeof CONTRACT_ABIS.WARM_STORAGE_VIEW, 'getAllDataSetMetadata'>
@@ -29,6 +33,8 @@ export type clientDataSetIDs = ExtractAbiFunction<typeof CONTRACT_ABIS.WARM_STOR
 export interface WarmStorageViewOptions {
   isProviderApproved?: (args: AbiToType<isProviderApproved['inputs']>) => AbiToType<isProviderApproved['outputs']>
   getClientDataSets?: (args: AbiToType<getClientDataSets['inputs']>) => AbiToType<getClientDataSets['outputs']>
+  clientDataSets?: (args: AbiToType<clientDataSets['inputs']>) => AbiToType<clientDataSets['outputs']>
+  getDataSet?: (args: AbiToType<getDataSet['inputs']>) => AbiToType<getDataSet['outputs']>
   railToDataSet?: (args: AbiToType<railToDataSet['inputs']>) => AbiToType<railToDataSet['outputs']>
   getApprovedProviders?: (args: AbiToType<getApprovedProviders['inputs']>) => AbiToType<getApprovedProviders['outputs']>
   getAllDataSetMetadata?: (
@@ -204,6 +210,27 @@ export function warmStorageViewCallHandler(data: Hex, options: JSONRPCOptions): 
         CONTRACT_ABIS.WARM_STORAGE_VIEW.find((abi) => abi.type === 'function' && abi.name === 'getClientDataSets')!
           .outputs,
         options.warmStorageView.getClientDataSets(args)
+      )
+    }
+
+    case 'clientDataSets': {
+      if (!options.warmStorageView?.clientDataSets) {
+        throw new Error('Warm Storage View: clientDataSets is not defined')
+      }
+      return encodeAbiParameters(
+        CONTRACT_ABIS.WARM_STORAGE_VIEW.find((abi) => abi.type === 'function' && abi.name === 'clientDataSets')!
+          .outputs,
+        options.warmStorageView.clientDataSets(args)
+      )
+    }
+
+    case 'getDataSet': {
+      if (!options.warmStorageView?.getDataSet) {
+        throw new Error('Warm Storage View: getDataSet is not defined')
+      }
+      return encodeAbiParameters(
+        CONTRACT_ABIS.WARM_STORAGE_VIEW.find((abi) => abi.type === 'function' && abi.name === 'getDataSet')!.outputs,
+        options.warmStorageView.getDataSet(args)
       )
     }
 

@@ -260,6 +260,7 @@ export const presets = {
     },
     warmStorageView: {
       isProviderApproved: () => [true],
+      // Keep legacy getters to satisfy RequiredDeep typing and backward-compat tests
       getClientDataSets: () => [
         [
           {
@@ -278,6 +279,22 @@ export const presets = {
         ],
       ],
       railToDataSet: () => [1n],
+      clientDataSets: () => [[1n]],
+      getDataSet: () => [
+        {
+          pdpRailId: 1n,
+          cacheMissRailId: 0n,
+          cdnRailId: 0n,
+          payer: ADDRESSES.client1,
+          payee: ADDRESSES.serviceProvider1,
+          serviceProvider: ADDRESSES.serviceProvider1,
+          commissionBps: 100n,
+          clientDataSetId: 0n,
+          pdpEndEpoch: 0n,
+          providerId: 1n,
+          cdnEndEpoch: 0n,
+        },
+      ],
       getApprovedProviders: () => [[1n, 2n]],
       getAllDataSetMetadata: (args) => {
         const [dataSetId] = args
