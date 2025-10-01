@@ -1,5 +1,5 @@
 import { TypedData } from 'ox'
-import { toEventSelector } from 'viem'
+import { keccak256, stringToHex } from 'viem'
 
 /**
  * EIP-712 Type definitions for PDP operations verified by WarmStorage.
@@ -41,5 +41,5 @@ for (const typeName in EIP712_TYPES) {
     primaryType: typeName,
   })
   EIP712_ENCODED_TYPES[typeName] = encodedType
-  EIP712_TYPE_HASHES[typeName] = toEventSelector(encodedType)
+  EIP712_TYPE_HASHES[typeName] = keccak256(stringToHex(encodedType))
 }
