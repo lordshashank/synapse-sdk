@@ -230,12 +230,25 @@ export class Synapse {
   }
 
   /**
-   * Sets the signer as the session key for storage actions
-   * @param sessionKeySigner The session key signer
+   * Wraps the signer as a session key
+   * @param sessionKeySigner The signer for the session key
    * @returns The SessionKey object for this signer
+   */
+  createSessionKey(sessionKeySigner: ethers.Signer): SessionKey {
+    return new SessionKey(
+      this._provider,
+      this._warmStorageService.getSessionKeyRegistryAddress(),
+      sessionKeySigner,
+      this._signer
+    )
+  }
+
+  /**
+   * Sets the signer as the session key for storage actions
+   * @param sessionKey The session key used by storage contexts
    * @example
    * ```typescript
-   * const sessionKey = synapse.setSession(privateKey)
+   * const sessionKey = synapse.createSessionKey(privateKey)
    *
    * // check for previous login
    * const expiries = await sessionKey.fetchExpiries(PDP_PERMISSIONS)
@@ -246,17 +259,12 @@ export class Synapse {
    *   const loginReceipt = await loginTx.wait()
    * }
    *
+   * synapse.setSession(sessionKey)
    * const context = await synapse.storage.createContext()
    * ```
    */
-  setSession(sessionKeySigner: ethers.Signer): SessionKey {
-    this._session = new SessionKey(
-      this._provider,
-      this._warmStorageService.getSessionKeyRegistryAddress(),
-      sessionKeySigner,
-      this._signer
-    )
-    return this._session
+  setSession(sessionKey: SessionKey | null) {
+    this._session = sessionKey
   }
 
   /**

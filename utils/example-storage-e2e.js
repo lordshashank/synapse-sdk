@@ -115,7 +115,8 @@ async function main() {
         sessionPrivateKey = `0x${sessionPrivateKey}`
       }
       const sessionKeyWallet = new ethers.Wallet(sessionPrivateKey, synapse.getProvider())
-      const sessionKey = synapse.setSession(sessionKeyWallet)
+      const sessionKey = synapse.createSessonKey(sessionKeyWallet)
+      synapse.setSession(sessionKey)
       const permissions = [CREATE_DATA_SET_TYPEHASH, ADD_PIECES_TYPEHASH]
       const expiries = await sessionKey.fetchExpiries(permissions)
       const sessionKeyAddress = await sessionKeyWallet.getAddress()

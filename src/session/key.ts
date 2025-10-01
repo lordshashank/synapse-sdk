@@ -9,13 +9,15 @@
  *
  * @example
  * ```typescript
- * const sessionKey = synapse.setSession(privateKey)
+ * const sessionKey = synapse.createSessionkey(privateKey)
  * const expiries = await sessionKey.fetchExpiries([ADD_PIECES_TYPEHASH])
  * if (expiries[ADD_PIECES_TYPEHASH] * BigInt(1000) < BigInt(Date.now()) + HOUR_MILLIS) {
  *   const DAY_MILLIS = BigInt(24) * HOUR_MILLIS
  *   const loginTx = await sessionKey.login(BigInt(Date.now()) / BigInt(1000 + 30 * DAY_MILLIS), PDP_PERMISSIONS)
  *   const loginReceipt = await loginTx.wait()
  * }
+ * synapse.setSession(sessionKey)
+ * const context = await synapse.storage.createContext()
  * ```
  */
 

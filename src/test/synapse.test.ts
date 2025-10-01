@@ -364,7 +364,8 @@ describe('Synapse', () => {
         })
       )
       const synapse = await Synapse.create({ signer })
-      const sessionKey = synapse.setSession(sessionKeySigner)
+      const sessionKey = synapse.createSessionKey(sessionKeySigner)
+      synapse.setSession(sessionKey)
       assert.equal(sessionKey.getSigner(), sessionKeySigner)
 
       const expiries = await sessionKey.fetchExpiries(PDP_PERMISSIONS)
