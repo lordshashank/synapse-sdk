@@ -116,20 +116,19 @@ async function main() {
       }
       const sessionKeyWallet = new ethers.Wallet(sessionPrivateKey, synapse.getProvider())
       const sessionKey = synapse.setSession(sessionKeyWallet)
-      await sessionKey.fetchExpiries()
+      const permissions = [CREATE_DATA_SET_TYPEHASH, ADD_PIECES_TYPEHASH]
+      const expiries = await sessionKey.fetchExpiries(permissions)
       const sessionKeyAddress = await sessionKeyWallet.getAddress()
 
       console.log('\n--- SessionKey Login ---')
       console.log(`Session Key: ${sessionKeyAddress})`)
       const permissionsToRefresh = []
-      const day = BigInt(TIME_CONSTANTS.EPOCHS_PER_DAY * BigInt(TIME_CONSTANTS.EPOCH_DURATION))
+      const day = TIME_CONSTANTS.EPOCHS_PER_DAY * BigInt(TIME_CONSTANTS.EPOCH_DURATION)
       const soon = BigInt(Date.now()) / BigInt(1000) + day / BigInt(6)
       const refresh = soon + day
-      for (const permission of [CREATE_DATA_SET_TYPEHASH, ADD_PIECES_TYPEHASH]) {
-        if (sessionKey.expiries[permission] < soon) {
-          console.log(
-            `  refreshing ${PDP_PERMISSION_NAMES[permission]}: ${sessionKey.expiries[permission]} to ${refresh}`
-          )
+      for (const permission of permissions) {
+        if (expiries[permission] < soon) {
+          console.log(`  refreshing ${PDP_PERMISSION_NAMES[permission]}: ${expiries[permission]} to ${refresh}`)
           permissionsToRefresh.push(permission)
         }
       }

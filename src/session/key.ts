@@ -10,9 +10,9 @@
  * @example
  * ```typescript
  * const sessionKey = synapse.setSession(privateKey)
- * await sessionKey.fetchExpiries()
- * if (sessionKey.expiries[ADD_PIECES_TYPEHASH] * 1000 < Date.now() + HOUR_MILLIS) {
- *   const DAY_MILLIS = 24 * HOUR_MILLIS
+ * const expiries = await sessionKey.fetchExpiries([ADD_PIECES_TYPEHASH])
+ * if (expiries[ADD_PIECES_TYPEHASH] * BigInt(1000) < BigInt(Date.now()) + HOUR_MILLIS) {
+ *   const DAY_MILLIS = BigInt(24) * HOUR_MILLIS
  *   const loginTx = await sessionKey.login(BigInt(Date.now()) / BigInt(1000 + 30 * DAY_MILLIS), PDP_PERMISSIONS)
  *   const loginReceipt = await loginTx.wait()
  * }
@@ -47,7 +47,6 @@ export class SessionKey {
   private readonly _registry: ethers.Contract
   private readonly _signer: ethers.Signer
   private readonly _owner: ethers.Signer
-  public readonly expiries: Record<string, bigint | null>
 
   public constructor(
     provider: ethers.Provider,
@@ -59,12 +58,6 @@ export class SessionKey {
     this._registry = sessionKeyRegistry.connect(owner) as ethers.Contract
     this._signer = signer
     this._owner = owner
-    this.expiries = {
-      CREATE_DATA_SET_TYPEHASH: null,
-      ADD_PIECES_TYPEHASH: null,
-      SCHEDULE_PIECE_REMOVALS_TYPEHASH: null,
-      DELETE_DATA_SET_TYPEHASH: null,
-    }
   }
 
   getSigner(): ethers.Signer {
@@ -72,9 +65,9 @@ export class SessionKey {
   }
 
   /**
-   * Refreshes SessionKey.expiries by fetching the expiries of those permissions from the registry
+   * Queries current permission expiries from the registry
    */
-  async fetchExpiries(): Promise<void> {
+  async fetchExpiries(permissions: string[] = PDP_PERMISSIONS): Promise<Record<string, bigint>> {
     const network = await getFilecoinNetworkType(this._provider)
 
     const multicall = new ethers.Contract(
@@ -92,7 +85,7 @@ export class SessionKey {
 
     // Prepare multicall batch
     const calls: Array<{ target: string; allowFailure: boolean; callData: string }> = []
-    for (const permission of PDP_PERMISSIONS) {
+    for (const permission of permissions) {
       calls.push({
         target: registryAddress,
         allowFailure: true,
@@ -107,12 +100,14 @@ export class SessionKey {
     // Execute multicall
     const results = await multicall.aggregate3.staticCall(calls)
 
-    for (let i = 0; i < PDP_PERMISSIONS.length; i++) {
-      this.expiries[PDP_PERMISSIONS[i]] = registryInterface.decodeFunctionResult(
+    const expiries: Record<string, bigint> = {}
+    for (let i = 0; i < permissions.length; i++) {
+      expiries[PDP_PERMISSIONS[i]] = registryInterface.decodeFunctionResult(
         'authorizationExpiry',
         results[i].returnData
       )[0]
     }
+    return expiries
   }
 
   /**

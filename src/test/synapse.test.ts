@@ -367,9 +367,9 @@ describe('Synapse', () => {
       const sessionKey = synapse.setSession(sessionKeySigner)
       assert.equal(sessionKey.getSigner(), sessionKeySigner)
 
-      await sessionKey.fetchExpiries()
+      const expiries = await sessionKey.fetchExpiries(PDP_PERMISSIONS)
       for (const permission of PDP_PERMISSIONS) {
-        assert.equal(sessionKey.expiries[permission], EXPIRY)
+        assert.equal(expiries[permission], EXPIRY)
       }
 
       const context = await synapse.storage.createContext()
