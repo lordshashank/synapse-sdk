@@ -12,6 +12,8 @@
 
 Check the documentation [website](https://synapse.filecoin.services/)
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/FilOzone/synapse-sdk)
+
 ## Examples
 
 The `examples` folder has many examples on how to start using Synapse in different environments and frameworks.
