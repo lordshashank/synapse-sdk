@@ -20,7 +20,7 @@ import type {
   SubgraphConfig,
   SynapseOptions,
 } from './types.ts'
-import { CHAIN_IDS, CONTRACT_ADDRESSES, getFilecoinNetworkType } from './utils/index.ts'
+import { CHAIN_IDS, CONTRACT_ADDRESSES, getFilecoinNetworkType, RPC_URLS } from './utils/index.ts'
 import { ProviderResolver } from './utils/provider-resolver.ts'
 import { WarmStorageService } from './warm-storage/index.ts'
 
@@ -35,6 +35,7 @@ export class Synapse {
   private readonly _pieceRetriever: PieceRetriever
   private readonly _storageManager: StorageManager
   private _session: SessionKey | null = null
+  private _sessionProvider: ethers.Provider | null = null
 
   /**
    * Create a new Synapse instance with async initialization.
@@ -173,7 +174,8 @@ export class Synapse {
       options.withCDN === true,
       warmStorageAddress,
       warmStorageService,
-      pieceRetriever
+      pieceRetriever,
+      options.sessionRpcUrl
     )
   }
 
@@ -185,7 +187,8 @@ export class Synapse {
     withCDN: boolean,
     warmStorageAddress: string,
     warmStorageService: WarmStorageService,
-    pieceRetriever: PieceRetriever
+    pieceRetriever: PieceRetriever,
+    sessionRpcUrl?: string
   ) {
     this._signer = signer
     this._provider = provider
@@ -196,6 +199,11 @@ export class Synapse {
     this._pieceRetriever = pieceRetriever
     this._warmStorageAddress = warmStorageAddress
     this._session = null
+
+    // Initialize session provider if sessionRpcUrl provided
+    if (sessionRpcUrl != null) {
+      this._sessionProvider = new ethers.JsonRpcProvider(sessionRpcUrl)
+    }
 
     // Initialize StorageManager
     this._storageManager = new StorageManager(this, this._warmStorageService, this._pieceRetriever, this._withCDN)
@@ -235,10 +243,28 @@ export class Synapse {
    * @returns The SessionKey object for this signer
    */
   createSessionKey(sessionKeySigner: ethers.Signer): SessionKey {
+    // Ensure session provider is initialized
+    if (this._sessionProvider == null) {
+      const rpcUrl = RPC_URLS[this._network].http
+      this._sessionProvider = new ethers.JsonRpcProvider(rpcUrl)
+    }
+    
+    // If sessionKeySigner has a provider, reconnect it to our session provider
+    // This ensures transactions are signed locally and not routed through MetaMask
+    let finalSigner = sessionKeySigner
+    if (sessionKeySigner.provider != null) {
+      // Reconnect the signer to the session provider
+      if ('connect' in sessionKeySigner && typeof sessionKeySigner.connect === 'function') {
+        finalSigner = (sessionKeySigner as ethers.Wallet).connect(this._sessionProvider)
+      }
+    }
+    
+    // SessionKey uses main provider for read operations (multicall)
+    // but the finalSigner is connected to session provider for local signing
     return new SessionKey(
       this._provider,
       this._warmStorageService.getSessionKeyRegistryAddress(),
-      sessionKeySigner,
+      finalSigner,
       this._signer
     )
   }
@@ -265,6 +291,13 @@ export class Synapse {
    */
   setSession(sessionKey: SessionKey | null) {
     this._session = sessionKey
+
+    // Initialize session provider if not already set and session is being activated
+    if (sessionKey != null && this._sessionProvider == null) {
+      // Use public RPC endpoint for the current network
+      const rpcUrl = RPC_URLS[this._network].http
+      this._sessionProvider = new ethers.JsonRpcProvider(rpcUrl)
+    }
   }
 
   /**
@@ -273,6 +306,15 @@ export class Synapse {
    */
   getProvider(): ethers.Provider {
     return this._provider
+  }
+
+  /**
+   * Gets the session provider if session is active, otherwise returns main provider
+   * @internal Used by StorageContext to avoid MetaMask interception with session keys
+   * @returns The appropriate provider for the current context
+   */
+  _getSessionProvider(): ethers.Provider {
+    return this._session != null && this._sessionProvider != null ? this._sessionProvider : this._provider
   }
 
   /**
