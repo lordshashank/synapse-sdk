@@ -155,8 +155,9 @@ export class StorageContext {
     // Get WarmStorage address from Synapse (which already handles override)
     this._warmStorageAddress = synapse.getWarmStorageAddress()
 
-    // Create PDPAuthHelper for signing operations
-    const authHelper = new PDPAuthHelper(this._warmStorageAddress, this._signer, BigInt(synapse.getChainId()))
+    // Create PDPAuthHelper for signing operations - pass both signer and payer
+    const payer = synapse.getClient() // Main wallet (payer)
+    const authHelper = new PDPAuthHelper(this._warmStorageAddress, this._signer, BigInt(synapse.getChainId()), payer)
 
     // Create PDPServer instance with provider URL from PDP product
     if (!provider.products.PDP?.data.serviceURL) {
@@ -247,16 +248,17 @@ export class StorageContext {
     performance.mark('synapse:createDataSet-start')
 
     const signer = synapse.getSigner()
-    const signerAddress = await signer.getAddress()
+    const payer = synapse.getClient() // Main wallet (payer)
+    const payerAddress = await payer.getAddress()
 
     // Create a new data set
 
-    // Get next client dataset ID
-    const nextDatasetId = await warmStorageService.getNextClientDataSetId(signerAddress)
+    // Get next client dataset ID (use payer address, not session key address)
+    const nextDatasetId = await warmStorageService.getNextClientDataSetId(payerAddress)
 
-    // Create auth helper for signing
+    // Create auth helper for signing - pass both signer (for signing) and payer (for extraData)
     const warmStorageAddress = synapse.getWarmStorageAddress()
-    const authHelper = new PDPAuthHelper(warmStorageAddress, signer, BigInt(synapse.getChainId()))
+    const authHelper = new PDPAuthHelper(warmStorageAddress, signer, BigInt(synapse.getChainId()), payer)
 
     // Create PDPServer instance for API calls
     if (!provider.products.PDP?.data.serviceURL) {

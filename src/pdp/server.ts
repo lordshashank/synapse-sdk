@@ -171,7 +171,7 @@ export class PDPServer {
     // Prepare the extra data for the contract call
     // This needs to match the DataSetCreateData struct in Warm Storage contract
     const extraData = this._encodeDataSetCreateData({
-      payer: await this.getAuthHelper().getSignerAddress(),
+      payer: await this.getAuthHelper().getPayerAddress(), // Use payer (main wallet) not signer (session key)
       metadata,
       signature: authData.signature,
     })

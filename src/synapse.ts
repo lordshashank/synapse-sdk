@@ -248,7 +248,7 @@ export class Synapse {
       const rpcUrl = RPC_URLS[this._network].http
       this._sessionProvider = new ethers.JsonRpcProvider(rpcUrl)
     }
-    
+
     // If sessionKeySigner has a provider, reconnect it to our session provider
     // This ensures transactions are signed locally and not routed through MetaMask
     let finalSigner = sessionKeySigner
@@ -256,9 +256,13 @@ export class Synapse {
       // Reconnect the signer to the session provider
       if ('connect' in sessionKeySigner && typeof sessionKeySigner.connect === 'function') {
         finalSigner = (sessionKeySigner as ethers.Wallet).connect(this._sessionProvider)
+      } else {
+        console.warn('[Synapse] Signer does not have connect method - cannot reconnect to session provider')
       }
+    } else if ('connect' in sessionKeySigner && typeof sessionKeySigner.connect === 'function') {
+      finalSigner = (sessionKeySigner as ethers.Wallet).connect(this._sessionProvider)
     }
-    
+
     // SessionKey uses main provider for read operations (multicall)
     // but the finalSigner is connected to session provider for local signing
     return new SessionKey(

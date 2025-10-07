@@ -44,11 +44,13 @@ declare global {
  */
 export class PDPAuthHelper {
   private readonly signer: ethers.Signer
+  private readonly payer: ethers.Signer
   private readonly domain: ethers.TypedDataDomain
   public readonly WITH_CDN_METADATA: MetadataEntry = { key: METADATA_KEYS.WITH_CDN, value: '' }
 
-  constructor(serviceContractAddress: string, signer: ethers.Signer, chainId: bigint) {
+  constructor(serviceContractAddress: string, signer: ethers.Signer, chainId: bigint, payer?: ethers.Signer) {
     this.signer = signer
+    this.payer = payer ?? signer // If no payer provided, signer is also the payer
 
     // EIP-712 domain
     this.domain = {
@@ -79,35 +81,59 @@ export class PDPAuthHelper {
       // Get the actual signer (unwrap NonceManager if needed)
       const actualSigner = this.getUnderlyingSigner()
 
-      // If it's a Wallet, it can sign locally, so not a MetaMask signer
-      if (actualSigner.constructor.name === 'Wallet') {
+      console.log('[PDPAuthHelper] Checking signer type:', {
+        constructorName: actualSigner.constructor.name,
+        hasSigningKey: 'signingKey' in actualSigner,
+        hasProvider: actualSigner.provider != null,
+        providerType: actualSigner.provider?.constructor.name,
+      })
+
+      // If it's a Wallet (has signTypedData method and privateKey), it can sign locally
+      // Check for Wallet by looking for the signingKey property which is unique to Wallet
+      // Note: constructor.name checks don't work in minified builds, so we rely on 'signingKey'
+      if ('signingKey' in actualSigner) {
+        console.log('[PDPAuthHelper] Detected Wallet (has signingKey) - using local signing')
         return false
       }
 
       // Check if signer has a provider
       const provider = actualSigner.provider
       if (provider == null) {
+        console.log('[PDPAuthHelper] No provider - using local signing')
         return false
       }
 
-      // Check for ethers v6 BrowserProvider
+      // Check for ethers v6 BrowserProvider (has _eip1193Provider)
       if ('_eip1193Provider' in provider) {
+        console.log('[PDPAuthHelper] Detected BrowserProvider - using MetaMask signing')
         return true
+      }
+
+      // JsonRpcProvider doesn't have _eip1193Provider, so if we're here with a Wallet, return false
+      if ('signingKey' in actualSigner) {
+        console.log('[PDPAuthHelper] Wallet with JsonRpcProvider - using local signing')
+        return false
       }
 
       // Check for window.ethereum (browser environment)
       if (typeof globalThis !== 'undefined' && 'window' in globalThis) {
         const win = globalThis as any
         if (win.window?.ethereum != null) {
+          console.log('[PDPAuthHelper] window.ethereum detected - using MetaMask signing')
           return true
         }
       }
 
-      // Check for provider with send method
-      if ('send' in provider || 'request' in provider) {
+      // Only treat as MetaMask if provider has send/request AND we're not a Wallet
+      // This prevents JsonRpcProvider-connected Wallets from being treated as MetaMask
+      if (('send' in provider || 'request' in provider) && !('signingKey' in actualSigner)) {
+        console.log('[PDPAuthHelper] Provider with send/request but not Wallet - using MetaMask signing')
         return true
       }
-    } catch {
+
+      console.log('[PDPAuthHelper] Default - using local signing')
+    } catch (error) {
+      console.error('[PDPAuthHelper] Error checking signer type:', error)
       // Silently fail and return false
     }
     return false
@@ -519,5 +545,13 @@ export class PDPAuthHelper {
    */
   async getSignerAddress(): Promise<string> {
     return await this.signer.getAddress()
+  }
+
+  /**
+   * Get the address of the payer (main wallet)
+   * @returns Promise resolving to the payer's Ethereum address
+   */
+  async getPayerAddress(): Promise<string> {
+    return await this.payer.getAddress()
   }
 }
