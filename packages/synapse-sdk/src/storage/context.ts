@@ -247,12 +247,12 @@ export class StorageContext {
     performance.mark('synapse:createDataSet-start')
 
     const signer = synapse.getSigner()
-    const [signerAddress, clientAddress] = await Promise.all([signer.getAddress(), synapse.getClient().getAddress()])
+    const clientAddress = await synapse.getClient().getAddress()
 
     // Create a new data set
 
     // Get next client dataset ID
-    const nextDatasetId = await warmStorageService.getNextClientDataSetId(signerAddress)
+    const nextDatasetId = await warmStorageService.getNextClientDataSetId(clientAddress)
 
     // Create auth helper for signing
     const warmStorageAddress = synapse.getWarmStorageAddress()
