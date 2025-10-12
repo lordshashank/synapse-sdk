@@ -51,6 +51,9 @@ export interface SynapseOptions {
   /** Authorization header value for API authentication (e.g., Bearer token) */
   authorization?: string
 
+  /** Optional RPC URL for session key operations (for browser environments to avoid MetaMask interception) */
+  sessionRpcUrl?: string
+
   // Advanced Configuration
 
   /** Whether to use CDN for retrievals (default: false) */
