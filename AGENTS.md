@@ -17,7 +17,7 @@ This document serves as context for LLM agent sessions working with the Synapse 
 ### Key Components
 
 - `Synapse`: Main SDK entry; minimal interface with `payments` property and `storage` manager; strict network validation (mainnet/calibration).
-- `PaymentsService`: Payment operations - deposits, withdrawals, balances, service approvals.
+- `PaymentsService`: Payment operations - deposits, withdrawals, balances, service approvals. The `deposit()` method accepts an optional `DepositOptions` object with `to` property to deposit funds to a different address than the signer, plus callback functions for visibility.
 - `SPRegistryService`: Service provider registry - registration, updates, product management, provider discovery.
 - `WarmStorageService`: Storage coordination - costs, allowances, data sets. Factory method `WarmStorageService.create(provider, address)`. Source of all contract addresses via discovery.
 - `StorageManager/StorageContext`: Storage operations with auto-managed or explicit contexts.
@@ -208,6 +208,7 @@ WarmStorageService (storage coordination)
 - Manages payment rails between parties
 - Supports operator approvals for account management
 - Address discovered from WarmStorage
+- **Deposit Flexibility**: The `deposit(token, to, amount)` function allows depositing to any address, not just the signer. SDK's `PaymentsService.deposit()` exposes this via `DepositOptions` object with optional `to` property.
 
 #### 5. Curio Storage Provider (Service Node)
 
